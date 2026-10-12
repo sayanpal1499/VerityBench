@@ -1,0 +1,21 @@
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+
+# Local LLM response cache
+.cache/
+
+# Python virtual environment and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS / IDE artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

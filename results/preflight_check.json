@@ -1,0 +1,148 @@
+{
+  "pf1_git_ignore_verified": true,
+  "pf2_and_pf3_model_checks": {
+    "groq/llama-3.1-8b-instant": {
+      "available": false,
+      "error": "API failure: LLM call failed for groq/llama-3.1-8b-instant after 0 retries: Groq HTTP 404: {\"error\":{\"message\":\"The model `llama-3.1-8b-instant` does not exist or you do not have access to it.\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}\n"
+    },
+    "groq/openai/gpt-oss-20b": {
+      "available": true,
+      "output": {
+        "answer": "4.2 bar",
+        "evidence": [
+          "The Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar and a maximum fluid temperature of -45 C."
+        ],
+        "confidence": 0.99,
+        "abstained": false
+      },
+      "uncached_metadata": {
+        "provider": "groq",
+        "model_id": "openai/gpt-oss-20b",
+        "prompt_version": "grounded_v1",
+        "cache_key": "07d686922f77898215333e84ffcd83109eab7c7d187abeaa85fe29e026777dd6",
+        "cache_hit": false,
+        "bypass_cache": true,
+        "retry_count": 0,
+        "pacing_sleep_sec": 0.0,
+        "latency_ms": 1008.93,
+        "input_tokens": 619,
+        "output_tokens": 146,
+        "total_tokens": 765,
+        "parameters_requested": {
+          "temperature": 0.0,
+          "seed": 42,
+          "json_mode": true,
+          "max_output_tokens": 512
+        },
+        "parameters_supported": {
+          "temperature": 0.0,
+          "seed": 42,
+          "response_format": "json_object"
+        },
+        "parameters_unsupported": [],
+        "system_fingerprint": "fp_816fc87d18",
+        "rate_limit_headers": {
+          "x-ratelimit-limit-requests": "1000",
+          "x-ratelimit-limit-tokens": "8000",
+          "x-ratelimit-remaining-requests": "997",
+          "x-ratelimit-remaining-tokens": "7175",
+          "x-ratelimit-reset-requests": "4m19.2s",
+          "x-ratelimit-reset-tokens": "6.187s"
+        },
+        "timestamp_utc": "2026-10-12T14:12:23.217096+00:00"
+      },
+      "cached_replay_hit": true
+    },
+    "groq/qwen/qwen3.8-27b": {
+      "available": true,
+      "output": {
+        "answer": "4.2 bar",
+        "evidence": [
+          "The Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar and a maximum fluid temperature of -45 C."
+        ],
+        "confidence": 1.0,
+        "abstained": false
+      },
+      "uncached_metadata": {
+        "provider": "groq",
+        "model_id": "qwen/qwen3.8-27b",
+        "prompt_version": "grounded_v1",
+        "cache_key": "f029ba9b8173d8dfbdb7a00667d44fc10794233e0279b12f4e2e75815ec65da2",
+        "cache_hit": false,
+        "bypass_cache": true,
+        "retry_count": 0,
+        "pacing_sleep_sec": 0.0,
+        "latency_ms": 672.06,
+        "input_tokens": 567,
+        "output_tokens": 82,
+        "total_tokens": 649,
+        "parameters_requested": {
+          "temperature": 0.0,
+          "seed": 42,
+          "json_mode": true,
+          "max_output_tokens": 512
+        },
+        "parameters_supported": {
+          "temperature": 0.0,
+          "seed": 42,
+          "response_format": "json_object"
+        },
+        "parameters_unsupported": [],
+        "system_fingerprint": "fp_424cb89518",
+        "rate_limit_headers": {
+          "x-ratelimit-limit-requests": "1000",
+          "x-ratelimit-limit-tokens": "8000",
+          "x-ratelimit-remaining-requests": "997",
+          "x-ratelimit-remaining-tokens": "7351",
+          "x-ratelimit-reset-requests": "4m19.2s",
+          "x-ratelimit-reset-tokens": "4.867s"
+        },
+        "timestamp_utc": "2026-10-12T14:12:23.897091+00:00"
+      }
+    },
+    "gemini/gemini-3.5-flash-lite": {
+      "available": true,
+      "parsed_judge_output": {
+        "claims": [
+          {
+            "claim_text": "The Velox-900 operates at 4.2 bar.",
+            "verdict": "supported",
+            "evidence_quote": "The Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar",
+            "reason": "The source explicitly states that the Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar."
+          }
+        ]
+      },
+      "uncached_metadata": {
+        "provider": "gemini",
+        "model_id": "gemini-3.5-flash-lite",
+        "prompt_version": "preflight_judge_v1",
+        "cache_key": "7e8ed2245fc57bb6eb5d5c8a9b5857205fc04055f5721aab17f50feb56876d3f",
+        "cache_hit": false,
+        "bypass_cache": true,
+        "retry_count": 0,
+        "pacing_sleep_sec": 0.0,
+        "latency_ms": 1831.32,
+        "input_tokens": 115,
+        "output_tokens": 117,
+        "total_tokens": 232,
+        "parameters_requested": {
+          "temperature": 0.0,
+          "seed": 42,
+          "json_mode": true,
+          "max_output_tokens": 512
+        },
+        "parameters_supported": {
+          "temperature": 0.0,
+          "seed": 42,
+          "response_mime_type": "application/json",
+          "response_json_schema": true
+        },
+        "parameters_unsupported": [],
+        "system_fingerprint": "gemini-3.5-flash-lite",
+        "rate_limit_headers": {},
+        "timestamp_utc": "2026-10-12T14:12:25.733072+00:00"
+      },
+      "cached_replay_hit": true
+    }
+  }
+}
