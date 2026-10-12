@@ -246,16 +246,26 @@ def _parse_qa_output(raw_text: str) -> QAOutput:
     return QAOutput.model_validate(data)
 
 
+class InputValidationError(ValueError):
+    """Raised when document or question fails pre-API input validation."""
+
+
 def validate_inputs(document: str, question: str) -> None:
     """Validate document and question before making any LLM API call."""
     if not isinstance(document, str) or not document.strip():
-        raise ValueError("Validation error: 'document' must be a non-empty string.")
+        raise InputValidationError("Validation error: 'document' must be a non-empty string.")
     if not isinstance(question, str) or not question.strip():
-        raise ValueError("Validation error: 'question' must be a non-empty, non-whitespace string.")
+        raise InputValidationError(
+            "Validation error: 'question' must be a non-empty, non-whitespace string."
+        )
     if len(question) > MAX_QUESTION_CHARS:
-        raise ValueError(
+        raise InputValidationError(
             f"Validation error: 'question' length ({len(question)} chars) exceeds "
             f"maximum allowed length ({MAX_QUESTION_CHARS} chars)."
+        )
+    if len(re.findall(r"[a-zA-Z0-9]", question)) < 2:
+        raise InputValidationError(
+            "Validation error: 'question' must contain at least 2 alphanumeric characters."
         )
 
 

@@ -302,6 +302,23 @@ def validate_variants(
             errors.append(
                 f"Variant {var.variant_id}: document_id '{var.document_id}' not found in documents."
             )
+        elif var.transformation != "empty_malformed" and not var.should_abstain:
+            eff_doc = (
+                var.modified_document
+                if var.modified_document is not None
+                else documents[var.document_id]
+            )
+            norm_doc = normalize_text_for_quote_match(eff_doc)
+            if not var.expected_evidence:
+                errors.append(
+                    f"Variant {var.variant_id}: answerable variant must have non-empty expected_evidence."
+                )
+            for ev in var.expected_evidence:
+                norm_ev = normalize_text_for_quote_match(ev)
+                if ev not in eff_doc and norm_ev not in norm_doc:
+                    errors.append(
+                        f"Variant {var.variant_id}: expected_evidence not found verbatim in effective document: '{ev[:80]}...'"
+                    )
 
         by_category[var.transformation] = by_category.get(var.transformation, 0) + 1
 
