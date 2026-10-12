@@ -7,7 +7,9 @@ from evaluation.dataset import (
     DatasetValidationError,
     compute_dataset_hash,
     load_documents,
+    load_jsonl_audit_claims,
     load_jsonl_base_cases,
+    validate_audit_claims,
     validate_base_cases,
     validate_variants,
 )
@@ -117,3 +119,47 @@ def test_validate_variants_checks_links_and_verification_gate() -> None:
         validate_variants([draft_variant], base_map, docs, require_verified=True)
 
     assert len(compute_dataset_hash()) == 16
+
+
+def test_validate_audit_claims_schema_evidence_and_strict_gate() -> None:
+    """Audit claims dataset (45 claims) must validate verbatim evidence and enforce strict gate."""
+    docs = load_documents()
+    base_records = load_jsonl_base_cases()
+    base_map: dict[str, BaseCaseRecord] = {r.id: r for r in base_records}
+    claims = load_jsonl_audit_claims()
+    assert len(claims) == 45
+
+    summary = validate_audit_claims(claims, base_map, docs, require_verified=True)
+    assert summary["total_claims"] == 45
+    assert summary["draft_claims"] == 0
+    assert summary["verified_claims"] == 45
+    assert summary["by_label"] == {
+        "supported": 15,
+        "contradicted": 15,
+        "unsupported": 15,
+    }
+    assert summary["flagged_for_human_review_count"] == 0
+    assert summary["flagged_for_human_review_ids"] == []
+    for rec in claims:
+        assert rec.status == "verified"
+        assert rec.verified_by == "sayanpal1499"
+        assert rec.verified_on == "2026-10-13"
+        assert rec.needs_human_review is False
+
+    flagged_claims = [deepcopy(c) for c in claims]
+    flagged_claims[0].needs_human_review = True
+    with pytest.raises(DatasetValidationError, match="needs_human_review is True"):
+        validate_audit_claims(flagged_claims, base_map, docs, require_verified=True)
+
+    draft_claims = [deepcopy(c) for c in claims]
+    draft_claims[0].status = "draft"
+    draft_claims[0].verified_by = None
+    draft_claims[0].verified_on = None
+    with pytest.raises(DatasetValidationError, match="strict audit requires status == 'verified'"):
+        validate_audit_claims(draft_claims, base_map, docs, require_verified=True)
+
+    bad_ev_claims = [deepcopy(c) for c in claims]
+    bad_ev_claims[0].source_evidence = ["Non-existent quote in DOC-001."]
+    with pytest.raises(DatasetValidationError, match="not found verbatim"):
+        validate_audit_claims(bad_ev_claims, base_map, docs, require_verified=False)
+

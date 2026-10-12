@@ -10,15 +10,17 @@ from typing import Any, Optional
 from pydantic import ValidationError
 
 from src.qa_system import normalize_text_for_quote_match
-from src.schemas import BaseCaseRecord, VariantRecord
+from src.schemas import AuditClaimRecord, BaseCaseRecord, VariantRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DOCS_DIR = PROJECT_ROOT / "data" / "documents"
 DEFAULT_BASE_CASES_PATH = PROJECT_ROOT / "data" / "base_cases.jsonl"
 DEFAULT_VARIANTS_PATH = PROJECT_ROOT / "data" / "variants.jsonl"
+DEFAULT_AUDIT_CLAIMS_PATH = PROJECT_ROOT / "data" / "audit_claims.jsonl"
 
 MIN_DOC_WORDS = 300
 MAX_DOC_WORDS = 1500
+MIN_AUDIT_CLAIMS = 40
 
 STOPWORDS = {
     "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
@@ -97,6 +99,26 @@ def load_jsonl_variants(path: Path = DEFAULT_VARIANTS_PATH) -> list[VariantRecor
         except (json.JSONDecodeError, ValidationError) as exc:
             raise DatasetValidationError(
                 f"Invalid variant record at {path}:{line_no}: {exc}"
+            ) from exc
+    return records
+
+
+def load_jsonl_audit_claims(path: Path = DEFAULT_AUDIT_CLAIMS_PATH) -> list[AuditClaimRecord]:
+    """Parse audit_claims.jsonl into a list of AuditClaimRecord objects."""
+    if not path.exists():
+        raise DatasetValidationError(f"Audit claims file not found: {path}")
+
+    records: list[AuditClaimRecord] = []
+    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            records.append(AuditClaimRecord.model_validate(data))
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise DatasetValidationError(
+                f"Invalid audit claim record at {path}:{line_no}: {exc}"
             ) from exc
     return records
 
@@ -349,6 +371,115 @@ def validate_variants(
     }
 
 
+def validate_audit_claims(
+    claims: list[AuditClaimRecord],
+    base_cases_by_id: dict[str, BaseCaseRecord],
+    documents: dict[str, str],
+    require_verified: bool = True,
+    min_claims: int = MIN_AUDIT_CLAIMS,
+) -> dict[str, Any]:
+    """Validate human-audited claims in data/audit_claims.jsonl (Phase 5)."""
+    errors: list[str] = []
+    if len(claims) < min_claims:
+        errors.append(
+            f"Expected at least {min_claims} audit claims, found {len(claims)}."
+        )
+
+    seen_ids: set[str] = set()
+    seen_texts: set[str] = set()
+    verified_count = 0
+    draft_count = 0
+    needs_review_ids: list[str] = []
+    by_label: dict[str, int] = {"supported": 0, "contradicted": 0, "unsupported": 0}
+    by_slice: dict[str, int] = {}
+
+    for rec in claims:
+        if rec.claim_id in seen_ids:
+            errors.append(f"Duplicate claim_id: '{rec.claim_id}'.")
+        seen_ids.add(rec.claim_id)
+
+        norm_claim = normalize_text_for_quote_match(rec.claim_text).lower()
+        if len(norm_claim) < 15:
+            errors.append(f"Claim {rec.claim_id}: claim_text is too short or empty.")
+        if norm_claim in seen_texts:
+            errors.append(f"Claim {rec.claim_id}: duplicate claim_text '{rec.claim_text}'.")
+        seen_texts.add(norm_claim)
+
+        if rec.base_id not in base_cases_by_id:
+            errors.append(
+                f"Claim {rec.claim_id}: base_id '{rec.base_id}' not found in base_cases."
+            )
+        if rec.document_id not in documents:
+            errors.append(
+                f"Claim {rec.claim_id}: document_id '{rec.document_id}' not found in documents."
+            )
+        else:
+            doc_text = documents[rec.document_id]
+            norm_doc = normalize_text_for_quote_match(doc_text)
+            if not rec.source_evidence:
+                errors.append(
+                    f"Claim {rec.claim_id}: source_evidence must contain at least 1 verbatim quote."
+                )
+            for ev in rec.source_evidence:
+                norm_ev = normalize_text_for_quote_match(ev)
+                if ev not in doc_text and norm_ev not in norm_doc:
+                    errors.append(
+                        f"Claim {rec.claim_id}: source_evidence quote not found verbatim in "
+                        f"{rec.document_id}: '{ev[:80]}...'"
+                    )
+
+        if len(rec.human_notes.strip()) < 20:
+            errors.append(
+                f"Claim {rec.claim_id}: human_notes must provide a clear manual verification "
+                f"rationale (>= 20 chars)."
+            )
+
+        by_label[rec.human_label] = by_label.get(rec.human_label, 0) + 1
+        by_slice[rec.slice] = by_slice.get(rec.slice, 0) + 1
+
+        if rec.needs_human_review:
+            needs_review_ids.append(rec.claim_id)
+            if require_verified:
+                errors.append(
+                    f"Claim {rec.claim_id}: needs_human_review is True; must be resolved before verified audit run."
+                )
+
+        if rec.status == "verified":
+            verified_count += 1
+            if not rec.verified_by or not rec.verified_on:
+                errors.append(
+                    f"Claim {rec.claim_id}: status is 'verified' but 'verified_by' or 'verified_on' is null."
+                )
+        else:
+            draft_count += 1
+            if require_verified:
+                errors.append(
+                    f"Claim {rec.claim_id}: status is '{rec.status}'; strict audit requires status == 'verified'."
+                )
+
+    for req_label in ("supported", "contradicted", "unsupported"):
+        if by_label.get(req_label, 0) == 0:
+            errors.append(
+                f"Audit claims dataset is missing required label class '{req_label}'."
+            )
+
+    if errors:
+        bullet_list = "\n  - ".join(errors[:25])
+        raise DatasetValidationError(
+            f"Audit claims validation failed with {len(errors)} error(s):\n  - {bullet_list}"
+        )
+
+    return {
+        "total_claims": len(claims),
+        "verified_claims": verified_count,
+        "draft_claims": draft_count,
+        "by_label": by_label,
+        "by_slice": by_slice,
+        "flagged_for_human_review_count": len(needs_review_ids),
+        "flagged_for_human_review_ids": needs_review_ids,
+    }
+
+
 def compute_dataset_hash(
     base_path: Path = DEFAULT_BASE_CASES_PATH,
     variants_path: Optional[Path] = None,
@@ -364,7 +495,9 @@ def compute_dataset_hash(
 
 def main() -> None:
     """CLI validator for inspecting dataset integrity and verification status."""
-    parser = argparse.ArgumentParser(description="Validate documents, base cases, and variants.")
+    parser = argparse.ArgumentParser(
+        description="Validate documents, base cases, variants, and audit claims."
+    )
     parser.add_argument(
         "--allow-draft",
         action="store_true",
@@ -375,10 +508,16 @@ def main() -> None:
         action="store_true",
         help="Also validate data/variants.jsonl if present.",
     )
+    parser.add_argument(
+        "--check-audit-claims",
+        action="store_true",
+        help="Also validate data/audit_claims.jsonl if present.",
+    )
     args = parser.parse_args()
 
     docs = load_documents()
     base_records = load_jsonl_base_cases()
+    base_map = {b.id: b for b in base_records}
     summary = validate_base_cases(
         records=base_records,
         documents=docs,
@@ -392,9 +531,17 @@ def main() -> None:
 
     if args.check_variants and DEFAULT_VARIANTS_PATH.exists():
         variants = load_jsonl_variants()
-        base_map = {b.id: b for b in base_records}
         output["variants_summary"] = validate_variants(
             variants=variants,
+            base_cases_by_id=base_map,
+            documents=docs,
+            require_verified=not args.allow_draft,
+        )
+
+    if args.check_audit_claims and DEFAULT_AUDIT_CLAIMS_PATH.exists():
+        claims = load_jsonl_audit_claims()
+        output["audit_claims_summary"] = validate_audit_claims(
+            claims=claims,
             base_cases_by_id=base_map,
             documents=docs,
             require_verified=not args.allow_draft,
@@ -405,3 +552,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

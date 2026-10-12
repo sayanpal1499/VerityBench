@@ -151,6 +151,7 @@ def _check_structured_answer_deterministic(
     answer_type: str,
     transformation: Optional[str] = None,
     injected_target_value: Optional[str] = None,
+    false_premise_value: Optional[str] = None,
 ) -> Optional[tuple[bool, str]]:
     """Attempt deterministic scoring of an answerable response.
 
@@ -204,17 +205,24 @@ def _check_structured_answer_deterministic(
             phrase in ans_norm
             for phrase in ("omits", "not eligible", "excluded", "not permitted", "do not refrigerate", "cannot be deleted", "must not")
         )
+        exp_tokens = _extract_key_tokens(exp_norm)
+        ans_tokens = _extract_key_tokens(ans_norm)
+        overlap = len(exp_tokens & ans_tokens) / max(1, len(exp_tokens))
         if exp_is_no:
             if ans_starts_yes:
                 return False, "Expected 'No' polarity, but output answered 'Yes'."
-            if ans_starts_no or ans_has_neg:
+            if (ans_starts_no or ans_has_neg) and overlap >= 0.20:
                 return True, "Deterministic Yes/No check: 'No' polarity and negative rationale confirmed."
-        elif exp_is_yes and ans_starts_no:
-            return False, "Expected 'Yes' polarity, but output answered 'No'."
+        elif exp_is_yes:
+            if ans_starts_no:
+                return False, "Expected 'Yes' polarity, but output answered 'No'."
+            if ans_starts_yes and overlap >= 0.35:
+                return True, "Deterministic Yes/No check: 'Yes' polarity and supporting rationale confirmed."
         return None
 
     # 5. Numeric & entity token checks for structured types
-    exp_nums = _extract_numbers(exp_norm)
+    false_nums = set(_extract_numbers(false_premise_value.lower())) if false_premise_value else set()
+    exp_nums = [n for n in _extract_numbers(exp_norm) if n not in false_nums]
     ans_nums = _extract_numbers(ans_norm)
 
     if answer_type in ("number_with_unit", "date", "named_entity", "list"):
@@ -229,7 +237,7 @@ def _check_structured_answer_deterministic(
                 if _is_value_locally_negated(ans_norm, n):
                     return False, f"Required numeric value '{n}' is negated in output."
 
-        exp_tokens = _extract_key_tokens(exp_norm)
+        exp_tokens = _extract_key_tokens(exp_norm) - false_nums
         ans_tokens = _extract_key_tokens(ans_norm)
         if exp_tokens:
             overlap = len(exp_tokens & ans_tokens) / len(exp_tokens)
@@ -241,7 +249,7 @@ def _check_structured_answer_deterministic(
             if not exp_nums and overlap == 0.0:
                 return False, f"Zero content token overlap with expected_answer '{expected_answer}'."
 
-    # 6. For two_sentence_fact, if all numbers and >=60% of key tokens match, accept deterministically
+    # 6. For two_sentence_fact, if all numbers and >=55% of key tokens match, accept deterministically
     if answer_type == "two_sentence_fact":
         if exp_nums and all(n in ans_nums for n in exp_nums):
             exp_tokens = _extract_key_tokens(exp_norm)
@@ -297,6 +305,7 @@ def score_single_output(
     judge_model: str = DEFAULT_JUDGE_MODEL,
     bypass_cache: bool = False,
     llm_caller: Callable[..., dict[str, Any]] = call_llm,
+    allow_llm_judge: bool = True,
 ) -> dict[str, Any]:
     """Score a single QAOutput against a verified BaseCaseRecord or VariantRecord."""
     transformation = getattr(case, "transformation", None)
@@ -409,16 +418,25 @@ def score_single_output(
         answer_type=answer_type,
         transformation=transformation,
         injected_target_value=injected_val,
+        false_premise_value=false_premise_val,
     )
     if det_check is not None:
         is_corr, reason = det_check
         result["is_correct"] = is_corr
         result["reason"] = reason
         if not is_corr and transformation == "distractor_near_miss" and injected_val:
+            inj_norm = normalize_text_for_quote_match(injected_val).lower()
             inj_nums = _extract_numbers(injected_val)
             ans_nums = _extract_numbers(ans_norm)
-            if inj_nums and inj_nums[0] in ans_nums:
+            if (inj_norm in ans_norm and not _is_value_locally_negated(ans_norm, inj_norm)) or (
+                inj_nums and inj_nums[0] in ans_nums
+            ):
                 result["distractor_captured"] = True
+        return result
+
+    if not allow_llm_judge:
+        result["is_correct"] = False
+        result["reason"] = "Deterministic rules inconclusive and allow_llm_judge=False."
         return result
 
     # 8. Semantic Judge fallback when deterministic rules cannot settle the comparison

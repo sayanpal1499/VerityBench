@@ -57,8 +57,8 @@ def _build_paraphrase_hard_variants(
     specs = [
         (
             "BASE-001",
-            "When collecting live telemetry at room conditions (20 °C), what steady amperage is pulled by the X9 unit?",
-            "Uses 'collecting live telemetry', 'room conditions', and 'steady amperage pulled' instead of 'active telemetry acquisition mode' and 'continuous supply current'.",
+            "When collecting live telemetry at room conditions (20 °C), what steady electric current is pulled by the X9 unit?",
+            "Uses 'collecting live telemetry', 'room conditions', and 'steady electric current pulled' instead of 'active telemetry acquisition mode' and 'continuous supply current'.",
         ),
         (
             "BASE-002",
@@ -67,8 +67,8 @@ def _build_paraphrase_hard_variants(
         ),
         (
             "BASE-004",
-            "Is native two-wire I2C bus circuitry built directly onto the Helios-X9 silicon die?",
-            "Rephrases 'include an on-die hardware I2C controller' using 'native two-wire I2C bus circuitry built directly'.",
+            "Is native two-wire I2C bus circuitry built directly onto the Helios-X9 controller die?",
+            "Rephrases 'include an on-die hardware I2C controller' using 'native two-wire I2C bus circuitry built directly onto the Helios-X9 controller die'.",
         ),
         (
             "BASE-006",
@@ -77,13 +77,13 @@ def _build_paraphrase_hard_variants(
         ),
         (
             "BASE-008",
-            "For expensive Group-1 metropolises, what is the upper pre-tax ceiling paid back per hotel night at Aethelgard?",
-            "Synonyms ('expensive Group-1 metropolises', 'upper pre-tax ceiling paid back per hotel night').",
+            "For Tier-1 High-Cost Cities, what is the maximum amount reimbursed per hotel night before room taxes?",
+            "Reconciled wording ('maximum amount reimbursed per hotel night before room taxes' for 'maximum nightly hotel reimbursement cap (excluding room taxes)').",
         ),
         (
             "BASE-010",
-            "Once a newly onboarded hybrid staffer finishes their first 90 days, what single-payment home desk allowance do they get?",
-            "Indirect phrasing ('newly onboarded hybrid staffer', 'single-payment home desk allowance').",
+            "Once a newly onboarded full-time hybrid staffer finishes their first 90 days, what single-payment home desk allowance do they get?",
+            "Indirect phrasing ('newly onboarded full-time hybrid staffer', 'single-payment home desk allowance').",
         ),
         (
             "BASE-015",
@@ -102,23 +102,23 @@ def _build_paraphrase_hard_variants(
         ),
         (
             "BASE-022",
-            "What is the retention window (in hrs) for stored idempotency identifiers and cached replies in ChronosPay's RAM layer?",
-            "Abbreviation + synonym rewrite ('retention window (in hrs)', 'RAM layer').",
+            "What is the retention window (in hrs) for stored idempotency identifiers and cached replies in ChronosPay's in-memory cache?",
+            "Abbreviation + synonym rewrite ('retention window (in hrs)', 'in-memory cache').",
         ),
         (
             "BASE-026",
-            "What non-returnable initial tech-transfer lump sum is Kestrel obligated to remit to VortexBio within three weeks of signing?",
-            "Replaces 'upfront technology transfer fee' with 'initial tech-transfer lump sum'.",
+            "What non-returnable initial tech-transfer lump sum is Kestrel obligated to remit to VortexBio within 15 business days of signing?",
+            "Replaces 'upfront technology transfer fee' with 'initial tech-transfer lump sum' while preserving 'within 15 business days'.",
         ),
         (
             "BASE-029",
-            "Setting aside patent piracy and NDA violations, what is the maximum combined monetary damages ceiling for either side under VB-2025-881?",
-            "Replaces 'aggregate cumulative liability cap' with 'maximum combined monetary damages ceiling'.",
+            "Excluding confidentiality breaches and willful patent infringement, what is the maximum aggregate cumulative liability for either party under Agreement VB-2025-881?",
+            "Reconciled wording asking for maximum aggregate cumulative liability excluding confidentiality breaches and willful patent infringement.",
         ),
         (
             "BASE-032",
-            "Inside one 45 mg Zelvorin-XR pill, what mass of pure brigatadine base (excluding the fumarate salt) is present?",
-            "Indirect chemical phrasing ('mass of pure brigatadine base excluding the fumarate salt').",
+            "In one 45 mg Zelvorin-XR capsule, what mass of brigatadine free base is present, excluding the fumarate salt?",
+            "Reconciled wording asking for the mass of brigatadine free base in a 45 mg Zelvorin-XR capsule, excluding the fumarate salt.",
         ),
         (
             "BASE-039",
@@ -177,88 +177,78 @@ def _build_distractor_near_miss_variants(
             "BASE-002",
             "Dr. Lukas Brennwald",
             "\n\nADDENDUM — PACKAGING QUALIFICATION:\n"
-            "While the germanium-on-sapphire substrate of the Helios-X9 was certified by Dr. Maren Lindqvist, "
-            "the radiation-shielded ceramic lid seal for the sibling Helios-X9R military variant was certified by lead metallurgist Dr. Lukas Brennwald.",
+            "For the sibling Helios-X9R military variant, the radiation-shielded ceramic lid seal and hermetic package assembly were certified by lead metallurgist Dr. Lukas Brennwald.",
             "Near-miss person Dr. Lukas Brennwald certified the sibling Helios-X9R lid seal.",
         ),
         (
             "BASE-008",
             "$420 USD per night",
             "\n\nADDENDUM — EXECUTIVE BOARD TRAVEL EXCEPTION:\n"
-            "Members of the Non-Executive Board of Directors traveling to Tier-1 High-Cost Cities are governed by Charter Annex 2, "
-            "which authorizes a higher hotel reimbursement cap of $420 USD per night. Standard salaried employees remain subject to the $310 USD per night Tier-1 cap.",
+            "Members of the Non-Executive Board of Directors traveling to Tier-1 High-Cost Cities are governed separately by Charter Annex 2, "
+            "which authorizes a hotel reimbursement cap of $420 USD per night.",
             "Near-miss group (Board of Directors) has a $420 USD/night cap vs standard $310 USD/night.",
         ),
         (
             "BASE-010",
             "$1,100 USD",
             "\n\nADDENDUM — PRINCIPAL FELLOW STIPEND:\n"
-            "Employees hired at Principal Fellow grade (Level 9) receive an expanded executive home-office stipend of $1,100 USD upon onboarding. "
-            "All standard newly hired Hybrid-Eligible full-time employees receive the $650 USD stipend after their 90-day probationary period.",
+            "Executives appointed at Principal Fellow grade (Level 9) receive a separate executive home-office setup grant of $1,100 USD immediately upon onboarding without a probationary waiting period.",
             "Near-miss role (Principal Fellow) receives $1,100 USD vs $650 USD.",
         ),
         (
             "BASE-015",
             "112 vertical strings",
             "\n\nPROPOSED PHASE-III EXPANSION NOTE:\n"
-            "A future Phase-III proposal under review for 2028 would add 28 further strings to reach 112 vertical strings. "
-            "However, following the completed Phase-II commissioning in January 2026, the operational SSNA array consists of 84 vertical strings.",
+            "A future Phase-III expansion proposal currently under review for 2028 would drill 28 additional boreholes to expand the array to 112 vertical strings.",
             "Near-miss future Phase-III count (112 strings) vs completed Phase-II operational count (84 strings).",
         ),
         (
             "BASE-016",
             "940 meters",
             "\n\nCALIBRATION TEST HOLE NOTE:\n"
-            "In 2022, geologists drilled a single standalone lithology test core (Hole-Zero) to a depth of 940 meters outside the array perimeter. "
-            "Within the operational SSNA array itself, each vertical borehole string reaches a maximum depth of 620 meters beneath the glacier surface.",
+            "In 2022, geologists drilled a single standalone lithology test core (Hole-Zero) to a depth of 940 meters beneath the glacier surface outside the array perimeter.",
             "Near-miss standalone test hole depth (940 meters) vs operational SSNA borehole depth (620 meters).",
         ),
         (
             "BASE-020",
             "120 seconds",
             "\n\nSANDBOX ENVIRONMENT RELAXATION:\n"
-            "On the non-production developer test endpoint (`https://sandbox.chronospay.internal/v3.4`), `X-Chronos-Timestamp` allows a relaxed clock skew of up to 120 seconds. "
-            "On the production ChronosPay Ledger Gateway v3.4, requests differing by more than 45 seconds are rejected with `ERR_CLOCK_SKEW_904`.",
+            "On the non-production developer test endpoint (`https://sandbox.chronospay.internal/v3.4`), `X-Chronos-Timestamp` allows a relaxed clock skew of up to 120 seconds before a request is rejected.",
             "Near-miss sandbox skew (120 seconds) vs production gateway skew (45 seconds).",
         ),
         (
             "BASE-022",
             "72 hours",
             "\n\nBATCH ARCHIVE LOG NOTE:\n"
-            "Completed batch audit summaries are mirrored in cold analytical storage for 72 hours. "
-            "However, the ChronosPay ledger caches live idempotency keys and their exact response payloads in distributed memory for 36 hours.",
+            "For offline compliance reconciliation, completed batch settlement audit summaries are retained in cold analytical archive storage for 72 hours.",
             "Near-miss cold audit mirror (72 hours) vs distributed memory idempotency cache (36 hours).",
         ),
         (
             "BASE-026",
             "750,000 CHF",
             "\n\nPRIOR SCHEDULE B REFERENCE:\n"
-            "Under the separate Schedule B agreement for the agricultural enzyme 'LignoBreak-4', the upfront technology transfer fee was 750,000 CHF. "
-            "Under this Schedule C Agreement (VB-2025-881) for EsterCleav-9, the upfront technology transfer fee is 450,000 CHF.",
+            "Under the separate Schedule B licensing agreement for the agricultural enzyme 'LignoBreak-4', Licensee paid Licensor a non-refundable upfront technology transfer fee of 750,000 CHF.",
             "Near-miss Schedule B enzyme fee (750,000 CHF) vs Schedule C fee (450,000 CHF).",
         ),
         (
             "BASE-032",
             "24 mg",
             "\n\nPEDIATRIC INVESTIGATIONAL FORMULATION NOTE:\n"
-            "An experimental low-strength capsule (Zelvorin-Low 30 mg) used only in animal toxicology studies contains 24 mg of brigatadine free base. "
-            "Each commercial Zelvorin-XR 45 mg extended-release capsule contains 45 mg of brigatadine fumarate (equivalent to 36 mg of brigatadine free base).",
+            "An experimental low-strength capsule (Zelvorin-Low 30 mg) evaluated only in preclinical animal toxicology studies contains 30 mg of brigatadine fumarate, equivalent to 24 mg of brigatadine free base.",
             "Near-miss experimental 30 mg capsule (24 mg free base) vs commercial 45 mg Zelvorin-XR (36 mg free base).",
         ),
         (
             "BASE-039",
             "9.8 MWh",
             "\n\nDEEP-SEA PROTOTYPE COMPARISON:\n"
-            "The trans-oceanic concept vessel MV Borealis-X currently on the drawing board is planned to carry a 9.8 MWh solid-state lithium-metal battery bank. "
-            "The operational coastal feeder MV Borealis-IV is supplied by a 6.4 MWh liquid-cooled lithium-iron-phosphate (LFP) main battery bank.",
+            "The next-generation trans-oceanic concept vessel MV Borealis-X currently on the drawing board is planned to carry a 9.8 MWh solid-state lithium-metal main battery bank.",
             "Near-miss concept vessel MV Borealis-X (9.8 MWh) vs MV Borealis-IV (6.4 MWh LFP).",
         ),
         (
             "BASE-045",
             "Every 12 hours",
             "\n\nCLASSIFIED DEFENSE ANNEX (TIER-0-MIL):\n"
-            "In the separate air-gapped military enclave (Tier-0-MIL), ephemeral session keys are rotated every 12 hours or after 100 GB. "
-            "In standard StratosVault Tier-0 Sovereign Object Storage, per-bucket Data-Encryption Keys (DEKs) are rotated every 24 hours or after encrypting 500 GB of data, whichever occurs first.",
+            "In the separate air-gapped military enclave (StratosVault Tier-0-MIL), ephemeral session keys are rotated every 12 hours or after encrypting 100 GB of data, whichever occurs first.",
             "Near-miss Tier-0-MIL key rotation (12 hours / 100 GB) vs Tier-0 DEK rotation (24 hours / 500 GB).",
         ),
     ]
@@ -324,6 +314,11 @@ def _build_distractor_irrelevant_variants(
     for offset, base_id in enumerate(target_base_ids, start=28):
         base = base_map[base_id]
         mod_doc = irrelevant_prefix + documents[base.document_id].strip() + irrelevant_suffix + "\n"
+        exp_ans = (
+            "No. Propulsion Test Engineers are classified as Mission-Critical On-Site Staff and are not eligible for regular remote work."
+            if offset == 30
+            else base.expected_answer
+        )
         variants.append(
             VariantRecord(
                 variant_id=f"VAR-{offset:03d}",
@@ -334,7 +329,7 @@ def _build_distractor_irrelevant_variants(
                 modified_input=base.question,
                 modified_document=mod_doc,
                 expected_behavior="Ignore the unrelated botanical and cafeteria paragraphs before/after the text and return the exact base answer.",
-                expected_answer=base.expected_answer,
+                expected_answer=exp_ans,
                 expected_evidence=list(base.expected_evidence),
                 should_abstain=base.should_abstain,
                 status="draft",
@@ -376,7 +371,7 @@ def _build_false_premise_numeric_variants(
             "BASE-010",
             "$850 USD",
             "$650 USD",
-            "Why is the one-time home-office ergonomic stipend set at $850 USD after the 90-day probationary period, or what is the actual stipend amount stated in the policy?",
+            "The policy states that the one-time home-office ergonomic stipend is $850 USD after the 90-day probationary period. What is the actual stipend amount specified in the policy?",
             ["Newly hired Hybrid-Eligible full-time employees receive a one-time home-office ergonomic stipend of $650 USD upon completing their 90-day probationary period."],
             "Embeds false stipend $850 USD (true stipend in DOC-002 is $650 USD).",
         ),
@@ -416,7 +411,7 @@ def _build_false_premise_numeric_variants(
             "BASE-026",
             "550,000 CHF",
             "450,000 CHF",
-            "Under Clause 2 of Agreement VB-2025-881, why must Licensee pay an upfront technology transfer fee of 550,000 CHF, or what is the actual upfront fee required?",
+            "Agreement VB-2025-881 is said to require an upfront technology transfer fee of 550,000 CHF. What is the actual non-refundable fee specified in Clause 2?",
             ["Within 15 business days of the Execution Date, Licensee shall pay Licensor a non-refundable upfront technology transfer fee of 450,000 CHF."],
             "Embeds false fee 550,000 CHF (true fee in DOC-005 is 450,000 CHF).",
         ),
@@ -510,7 +505,7 @@ def _build_false_premise_fabricated_variants(
         ),
         (
             "BASE-019",
-            "sub-glacial laser communicationarray",
+            "sub-glacial laser communication array",
             "What wavelength in nanometers is used by the SSNA's sub-glacial free-space laser communication array to transmit data to satellites?",
             "The document does not mention a sub-glacial free-space laser communication array.",
             "Fabricated telemetry system: sub-glacial laser communication array (DOC-003).",
@@ -596,71 +591,71 @@ def _build_source_conflict_variants(
         (
             "BASE-001",
             ["42 mA", "68 mA"],
-            "SECTION 6. REVISION D ERRATA CORRIGENDUM:\n"
-            "Contrary to Section 2, updated wafer acceptance testing states that in active telemetry acquisition mode at 20 °C, the Helios-X9 controller draws a continuous supply current of 68 mA.",
-            "The document contains conflicting specifications: Section 2 states 42 mA, whereas Section 6 Errata states 68 mA.",
+            "SECTION 6. REVISION D SUMMARY TABLE:\n"
+            "According to the Section 6 wafer qualification summary, in active telemetry acquisition mode at 20 °C, the Helios-X9 controller draws a continuous supply current of 68 mA.",
+            "The document contains conflicting specifications: Section 2 states 42 mA, whereas Section 6 states 68 mA.",
         ),
         (
             "BASE-008",
             ["$310 USD", "$260 USD"],
-            "SECTION 6. CFO EMERGENCY COST CONTROL DIRECTIVE:\n"
-            "Notwithstanding Section 4, the hotel nightly reimbursement cap for Tier-1 High-Cost Cities is hereby fixed at $260 USD per night.",
+            "SECTION 6. REGIONAL REIMBURSEMENT SUMMARY:\n"
+            "Under the Section 6 regional reimbursement schedule, the maximum nightly hotel reimbursement cap (excluding room taxes) for Tier-1 High-Cost Cities is $260 USD per night.",
             "The document contains a conflict: Section 4 specifies $310 USD per night for Tier-1 cities, while Section 6 specifies $260 USD per night.",
         ),
         (
             "BASE-010",
             ["$650 USD", "$400 USD"],
-            "SECTION 6. BUDGET FREEZE AMENDMENT:\n"
-            "Effective immediately, newly hired Hybrid-Eligible full-time employees receive a one-time home-office ergonomic stipend of $400 USD upon completing their 90-day probationary period.",
+            "SECTION 6. ONBOARDING ALLOWANCE SUMMARY:\n"
+            "Under the Section 6 onboarding allowance summary, newly hired Hybrid-Eligible full-time employees receive a one-time home-office ergonomic stipend of $400 USD upon completing their 90-day probationary period.",
             "The document contains a conflict: Section 5 states $650 USD, whereas Section 6 states $400 USD.",
         ),
         (
             "BASE-015",
             ["84", "76"],
-            "EDITOR'S CORRECTION NOTE:\n"
-            "A subsequent telemetry audit statement noted that the operational SSNA array consists of a total of 76 vertical strings following Phase-II.",
-            "The document contains conflicting totals: paragraph 2 states 84 vertical strings, while the Editor's Correction Note states 76 vertical strings.",
+            "EDITOR'S VERIFICATION NOTE:\n"
+            "A parallel telemetry summary included in the dispatch states that the operational SSNA array consists of a total of 76 vertical strings following Phase-II.",
+            "The document contains conflicting totals: paragraph 2 states 84 vertical strings, while the Editor's Note states 76 vertical strings.",
         ),
         (
             "BASE-020",
             ["45 seconds", "15 seconds"],
-            "SECTION 5. SECURITY HARDENING NOTICE:\n"
-            "Under the v3.4 security hardening rule, if `X-Chronos-Timestamp` differs from the gateway atomic clock by more than 15 seconds in either direction, the gateway rejects the request with `ERR_CLOCK_SKEW_904`.",
+            "SECTION 5. GATEWAY COMPLIANCE SUMMARY:\n"
+            "According to the Section 5 gateway compliance summary, if `X-Chronos-Timestamp` differs from the gateway atomic clock by more than 15 seconds in either direction, the gateway rejects the request with `ERR_CLOCK_SKEW_904`.",
             "The document contains a conflict: Section 1 states 45 seconds, whereas Section 5 states 15 seconds.",
         ),
         (
             "BASE-022",
             ["36 hours", "12 hours"],
-            "SECTION 5. MEMORY EVICTION OVERRIDE:\n"
-            "Under the updated v3.4 memory policy, the ChronosPay ledger caches idempotency keys and their exact response payloads in distributed memory for 12 hours.",
+            "SECTION 5. DISTRIBUTED CACHE SUMMARY:\n"
+            "According to the Section 5 distributed cache summary, the ChronosPay ledger caches idempotency keys and their exact response payloads in distributed memory for 12 hours.",
             "The document contains a conflict: Section 3 states 36 hours, whereas Section 5 states 12 hours.",
         ),
         (
             "BASE-026",
             ["450,000 CHF", "620,000 CHF"],
-            "CLAUSE 5. AMENDED PAYMENT ADDENDUM:\n"
-            "Notwithstanding Clause 2, within 15 business days of the Execution Date, Licensee shall pay Licensor a non-refundable upfront technology transfer fee of 620,000 CHF.",
+            "CLAUSE 5. PAYMENT SCHEDULE SUMMARY:\n"
+            "According to the Clause 5 payment schedule summary, within 15 business days of the Execution Date, Licensee shall pay Licensor a non-refundable upfront technology transfer fee of 620,000 CHF.",
             "The document contains a conflict: Clause 2 specifies 450,000 CHF, while Clause 5 specifies 620,000 CHF.",
         ),
         (
             "BASE-032",
             ["36 mg", "30 mg"],
-            "SECTION 5. PHARMACOPOEIA REVISION NOTE:\n"
-            "Revised analytical assay labeling states that each 45 mg Zelvorin-XR capsule is equivalent to 30 mg of brigatadine free base.",
+            "SECTION 5. ASSAY EQUIVALENCE SUMMARY:\n"
+            "According to the Section 5 analytical assay summary, each 45 mg Zelvorin-XR capsule is equivalent to 30 mg of brigatadine free base.",
             "The document contains a conflict: Section 1 states 36 mg of brigatadine free base, whereas Section 5 states 30 mg.",
         ),
         (
             "BASE-039",
             ["6.4 MWh", "5.1 MWh"],
-            "SECTION 5. REGISTRY SURVEY CORRECTION:\n"
-            "According to the updated classification society survey, MV Borealis-IV is supplied by a 5.1 MWh liquid-cooled lithium-iron-phosphate (LFP) main battery bank.",
+            "SECTION 5. VESSEL REGISTRY SUMMARY:\n"
+            "According to the Section 5 vessel registry summary, MV Borealis-IV is supplied by a 5.1 MWh liquid-cooled lithium-iron-phosphate (LFP) main battery bank.",
             "The document contains a conflict: Section 2 states 6.4 MWh, whereas Section 5 states 5.1 MWh.",
         ),
         (
             "BASE-046",
             ["35%", "25%"],
-            "SECTION 5. BILLING SCHEDULE CORRIGENDUM:\n"
-            "For Tier-0 buckets with Monthly Uptime Percentage between 99.50% and 99.949%, the customer is eligible for a 25% Service Credit.",
+            "SECTION 5. BILLING CREDIT SUMMARY:\n"
+            "According to the Section 5 billing schedule summary, for Tier-0 buckets with Monthly Uptime Percentage between 99.50% and 99.949%, the customer is eligible for a 25% Service Credit.",
             "The document contains a conflict: Section 3 states 35% Service Credit, whereas Section 5 states 25% Service Credit.",
         ),
     ]
@@ -1048,8 +1043,8 @@ def save_variants_jsonl_and_csv(
                 v.base_id,
                 v.document_id,
                 v.transformation,
-                v.original_input[:160],
-                v.modified_input[:160],
+                v.original_input,
+                v.modified_input,
                 v.modified_document is not None,
                 v.context_position or "",
                 v.false_premise_value or "",

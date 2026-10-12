@@ -135,3 +135,38 @@ class ClaimJudgeOutput(BaseModel):
     """Structured output from the Layer-3 independent claim hallucination judge (Phase 5)."""
 
     claims: list[ClaimVerdictItem] = Field(default_factory=list)
+
+
+class AuditClaimRecord(BaseModel):
+    """Human-audited atomic claim record in data/audit_claims.jsonl (Phase 5)."""
+
+    claim_id: str
+    base_id: str
+    document_id: str
+    slice: Literal[
+        "verbatim_fact",
+        "paraphrase",
+        "unit_conversion",
+        "multi_clause_fact",
+        "negation_inversion",
+        "wrong_entity_or_condition",
+        "numeric_contradiction",
+        "unanswerable_extrapolation",
+        "unsupported_inference",
+    ]
+    question: str
+    claim_text: str
+    source_evidence: list[str] = Field(
+        min_length=1,
+        description="Verbatim quote(s) from the source document used to verify the label.",
+    )
+    human_label: Literal["supported", "contradicted", "unsupported"]
+    human_notes: str
+    needs_human_review: bool = False
+    status: Literal["draft", "verified"] = "draft"
+    verified_by: Optional[str] = None
+    verified_on: Optional[str] = None
+    detector_label: Optional[Literal["supported", "contradicted", "unsupported"]] = None
+    detector_layer: Optional[str] = None
+    detector_reason: Optional[str] = None
+
