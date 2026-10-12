@@ -24,20 +24,23 @@ def test_load_documents_word_counts() -> None:
         assert 300 <= word_count <= 1500
 
 
-def test_base_cases_structure_and_verbatim_quotes_in_draft_mode() -> None:
-    """All 50 base cases must validate in draft mode without mutating status."""
+def test_base_cases_structure_and_verbatim_quotes_verified() -> None:
+    """All 50 human-verified base cases must pass strict runner validation (require_verified=True)."""
     docs = load_documents()
     records = load_jsonl_base_cases()
     assert len(records) == 50
 
-    summary = validate_base_cases(records, docs, require_verified=False)
+    summary = validate_base_cases(records, docs, require_verified=True)
     assert summary["total_cases"] == 50
     assert summary["answerable_cases"] == 38
     assert summary["unanswerable_cases"] == 12
+    assert summary["verified_cases"] == 50
+    assert summary["draft_cases"] == 0
 
-    # Ensure validator never auto-promotes draft status
     for rec in records:
-        assert rec.status in ("draft", "verified")
+        assert rec.status == "verified"
+        assert rec.verified_by == "sayanpal1499"
+        assert rec.verified_on == "2026-10-12"
 
 
 def test_strict_verification_gate_rejects_draft_cases() -> None:
