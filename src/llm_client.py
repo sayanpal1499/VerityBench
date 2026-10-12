@@ -21,13 +21,13 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 DEFAULT_CACHE_DIR = PROJECT_ROOT / ".cache" / "llm_responses"
 
-# Default fixed models per PLAN.md §3.1
-DEFAULT_SUT_MODEL = "groq/llama-3.1-8b-instant"
+# Default fixed models approved after RUN-00-PREFLIGHT (PLAN.md §3.1)
+DEFAULT_SUT_MODEL = "groq/openai/gpt-oss-20b"
 DEFAULT_JUDGE_MODEL = "gemini/gemini-3.5-flash-lite"
 
-# Provisional rate limits with a 15% safety margin (PLAN.md §6.1)
+# Verified rate limits with a 15% safety margin (8,000 TPM -> 6,800 TPM on Groq)
 SAFE_RATE_LIMITS: dict[str, dict[str, int]] = {
-    "groq": {"rpm_safe": 25, "tpm_safe": 5100},
+    "groq": {"rpm_safe": 25, "tpm_safe": 6800},
     "gemini": {"rpm_safe": 12, "tpm_safe": 212500},
 }
 

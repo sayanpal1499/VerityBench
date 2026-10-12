@@ -144,5 +144,78 @@
       },
       "cached_replay_hit": true
     }
-  }
+  },
+  "approved_fixed_sut_model": "groq/openai/gpt-oss-20b",
+  "approved_fixed_judge_model": "gemini/gemini-3.5-flash-lite",
+  "phase1_manual_examples_inspected": [
+    {
+      "example_id": "EX-1_clean_number",
+      "question": "What is the nominal actuation pressure of the Velox-900 Cryo-Valve?",
+      "final_output": {
+        "answer": "4.2 bar",
+        "evidence": [
+          "The Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar and a maximum fluid temperature of -45 C."
+        ],
+        "confidence": 0.99,
+        "abstained": false
+      },
+      "gate_triggered": false,
+      "gate_reason": "passed_verbatim_quote_check (verified=1, fuzzy=0)"
+    },
+    {
+      "example_id": "EX-2_near_miss_entity",
+      "question": "What is the operating pressure of the standard Velox-400 Valve?",
+      "final_output": {
+        "answer": "2.1 bar",
+        "evidence": [
+          "By contrast, the standard Velox-400 Valve operates at 2.1 bar and +80 C."
+        ],
+        "confidence": 1.0,
+        "abstained": false
+      },
+      "gate_triggered": false,
+      "gate_reason": "passed_verbatim_quote_check (verified=1, fuzzy=0)"
+    },
+    {
+      "example_id": "EX-3_two_clause",
+      "question": "At what pressure does the secondary relief port open and how often must seals be replaced?",
+      "final_output": {
+        "answer": "The secondary relief port opens at 6.8 bar, and the fluoropolymer seals should be replaced every 1,200 operating hours.",
+        "evidence": [
+          "For emergency bypass, the secondary relief port opens automatically at 6.8 bar.",
+          "Maintenance interval: replace fluoropolymer seals every 1,200 operating hours."
+        ],
+        "confidence": 0.99,
+        "abstained": false
+      },
+      "gate_triggered": false,
+      "gate_reason": "passed_verbatim_quote_check (verified=2, fuzzy=0)"
+    },
+    {
+      "example_id": "EX-4_unanswerable_tempting",
+      "question": "What is the weight in kilograms of the Velox-900 Cryo-Valve?",
+      "final_output": {
+        "answer": "The document does not provide information about the weight of the Velox-900 Cryo-Valve.",
+        "evidence": [],
+        "confidence": 1.0,
+        "abstained": true
+      },
+      "gate_triggered": false,
+      "gate_reason": "model_voluntarily_abstained"
+    },
+    {
+      "example_id": "EX-5_false_premise",
+      "question": "Why does the Velox-900 Cryo-Valve operate at a nominal actuation pressure of 9.5 bar?",
+      "final_output": {
+        "answer": "The premise is incorrect: the Velox-900 Cryo‑Valve operates at a nominal actuation pressure of 4.2 bar, not 9.5 bar.",
+        "evidence": [
+          "The Velox-900 Cryo-Valve operates at a nominal actuation pressure of 4.2 bar and a maximum fluid temperature of -45 C."
+        ],
+        "confidence": 0.99,
+        "abstained": false
+      },
+      "gate_triggered": false,
+      "gate_reason": "passed_verbatim_quote_check (verified=1, fuzzy=0)"
+    }
+  ]
 }

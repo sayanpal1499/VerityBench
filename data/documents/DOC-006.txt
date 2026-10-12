@@ -1,0 +1,22 @@
+DOCUMENT ID: DOC-006
+TITLE: Prescribing & Patient Information Leaflet — ZELVORIN-XR (brigatadine fumarate) 45 mg Extended-Release Capsules
+REGULATORY APPROVAL CODE: EMA/H/C/009412
+REVISION DATE: December 8, 2025
+
+1. THERAPEUTIC INDICATION AND ACTIVE INGREDIENT
+Zelvorin-XR is a selective potassium-channel modulator indicated for the maintenance treatment of chronic neuropathic vestibular migraine in adults aged 18 to 70 years. Each enteric-coated extended-release capsule contains 45 mg of brigatadine fumarate (equivalent to 36 mg of brigatadine free base). Inactive capsule excipients include microcrystalline cellulose, hypromellose phthalate, and titanium dioxide; the formulation is certified lactose-free and gluten-free.
+
+2. RECOMMENDED DOSAGE AND ADMINISTRATION
+The standard adult starting and maintenance dose is one 45 mg capsule taken orally once daily in the morning, swallowed whole with at least 200 mL of water. Capsules must not be crushed, chewed, or dissolved, as breaking the enteric matrix causes rapid release and increases peak plasma concentration by 240%.
+
+For patients with moderate renal impairment (estimated glomerular filtration rate [eGFR] between 30 and 59 mL/min/1.73 m2), the dosing interval must be extended to one 45 mg capsule every 48 hours. Zelvorin-XR is strictly contraindicated in patients with severe renal impairment (eGFR below 30 mL/min/1.73 m2) and in patients with Child-Pugh Class C hepatic cirrhosis. Pediatric safety and efficacy in individuals under 18 years of age have not been established.
+
+3. PHARMACOKINETICS AND DRUG INTERACTIONS
+Following oral administration of a single 45 mg extended-release capsule under fasting conditions, peak plasma concentration (Tmax) is reached in 5.5 hours. Brigatadine exhibits a terminal elimination half-life of 19 hours and is 82% bound to human plasma albumin. Approximately 68% of the administered dose is excreted unchanged via renal tubular secretion, while 27% is metabolized in the liver primarily by the CYP2D6 enzyme pathway.
+
+Co-administration of Zelvorin-XR with strong CYP2D6 inhibitors (such as fluoxetine, paroxetine, or quinidine) is contraindicated unless the patient undergoes weekly electrocardiographic QTc monitoring. Concurrent use with monoamine oxidase inhibitors (MAOIs) requires a mandatory 14-day washout period before initiating Zelvorin-XR therapy.
+
+4. ADVERSE REACTIONS AND STORAGE CONDITIONS
+In Phase-III clinical trials involving 1,420 adult patients, the most commonly reported adverse reactions were mild transient tinnitus (11.4%), dry mouth (8.2%), and orthostatic dizziness (5.7%). Reversible asymptomatic elevation of serum transaminases occurred in 1.8% of subjects.
+
+Unopened blister packs of Zelvorin-XR must be stored in their original foil carton at controlled room temperature between 15 °C and 25 °C. Do not refrigerate or freeze, as exposure below 8 °C causes irreversible crystallization of the extended-release polymer coat. Once a foil blister cavity is opened, the capsule must be consumed within 6 hours.

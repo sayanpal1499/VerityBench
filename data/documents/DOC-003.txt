@@ -1,0 +1,16 @@
+DOCUMENT ID: DOC-003
+TITLE: Arctic Science Dispatch — Svalbard Sub-Glacial Neutrino Array (SSNA) Completes Phase-II Commissioning
+PUBLICATION DATE: January 22, 2026
+AUTHOR: Astrid Solberg, Senior Polar Science Correspondent
+
+LONGYEARBYEN — After four winters of high-arctic drilling across the Austfonna ice cap, the European High-Energy Cryo-Astrophysics Consortium (EHECC) officially completed Phase-II commissioning of the Svalbard Sub-Glacial Neutrino Array (SSNA) on January 18, 2026. Situated 190 kilometers northeast of Longyearbyen on Nordaustlandet island, the observatory is designed to detect ultra-high-energy tau neutrinos originating from active galactic nuclei.
+
+Unlike the older IceCube observatory at the South Pole, which relies on deep optical Cherenkov strings deployed down to 2,450 meters, the SSNA operates in shallower, colder polar firn using hybrid radio-acoustic Cherenkov modules. Principal Investigator Dr. Kasper Lindholm of the University of Bergen confirmed that Phase-II added 48 new borehole strings to the 36 strings installed during Phase-I in 2023, bringing the operational array to a total of 84 vertical strings.
+
+Each vertical borehole string reaches a maximum depth of 620 meters beneath the glacier surface and carries 12 autonomous "FrostPulse-3" sensor nodes spaced 35 meters apart. Instead of standard photomultiplier tubes, each FrostPulse-3 node pairs a four-channel phased radio dipole antenna with a piezoelectric acoustic hydrophone capable of registering thermo-acoustic pressure waves generated when a neutrino interacts with dense glacial ice.
+
+Total construction funding for the SSNA reached 142 million EUR, contributed jointly by the Nordic Research Council (64 million EUR), the Helmholtz Polar Initiative (48 million EUR), and the Swiss National Science Foundation (30 million EUR). Power for the unmanned surface central processing bunker is supplied by three methanol fuel-cell generators backed by a 400 kWh lithium-titanate battery array, as environmental treaties on Nordaustlandet prohibit nuclear radioisotope thermoelectric generators (RTGs) and diesel turbines.
+
+Commissioning was briefly delayed for 11 days on December 4, 2025, when a geomagnetic substorm induced a 28-volt ground-loop surge along the eastern fiber-optic trunk cable. Chief Field Engineer Sivert Haugland reported that two surface multiplexer boards in Sector C were damaged during the surge, while all 1,008 subsurface FrostPulse-3 nodes remained unharmed due to galvanic optical isolation. Following replacement of the Sector C multiplexers with spare optical transceivers flown in from Tromso, full 84-string coincidence recording resumed on December 15, 2025.
+
+During its first 30 days of integrated operation, the array recorded 19,400 atmospheric muon calibration events and identified 3 candidate extragalactic tau-neutrino cascades above 100 PeV. Consortium leadership plans to release the first open-access calibration catalog to external astrophysics groups on August 1, 2026.

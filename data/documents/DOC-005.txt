@@ -1,0 +1,23 @@
+DOCUMENT ID: DOC-005
+TITLE: Commercial Enzyme Sublicensing & Royalty Agreement — Schedule C (Contract Ref: VB-2025-881)
+PARTIES: VortexBio Synthetics AG ("Licensor") and Kestrel Biopolymers Ltd ("Licensee")
+EXECUTION DATE: September 30, 2025
+
+CLAUSE 1. GRANT OF EXCLUSIVE TERRITORIAL LICENSE
+Subject to the terms of this Agreement, Licensor grants Licensee an exclusive, non-transferable license to manufacture and distribute the proprietary thermostable depolymerase enzyme "EsterCleav-9" for industrial PET plastic recycling within the Nordic-Baltic Territory (defined strictly as Norway, Sweden, Finland, Estonia, Latvia, and Lithuania). Manufacturing or commercial distribution inside Denmark, Germany, or Poland is expressly excluded from this grant and remains reserved by Licensor.
+
+CLAUSE 2. UPFRONT FEE, TIERED ROYALTIES, AND MINIMUM ANNUAL COMMITMENT
+Within 15 business days of the Execution Date, Licensee shall pay Licensor a non-refundable upfront technology transfer fee of 450,000 CHF. Thereafter, Licensee shall pay quarterly earned royalties on Net Sales of EsterCleav-9 products according to the following tiered schedule:
+- Tier A (Annual Net Sales up to 5,000,000 CHF): 6.5% of Net Sales
+- Tier B (Annual Net Sales between 5,000,001 CHF and 15,000,000 CHF): 4.8% of Net Sales
+- Tier C (Annual Net Sales exceeding 15,000,000 CHF): 3.2% of Net Sales
+
+Regardless of actual sales volume, Licensee guarantees a Minimum Annual Royalty of 180,000 CHF per calendar year starting in Calendar Year 2026. If cumulative quarterly royalties for a calendar year fall short of 180,000 CHF, Licensee must remit the shortfall difference by January 31 of the following year.
+
+CLAUSE 3. SUBLICENSING RIGHTS AND REVENUE SHARE
+Licensee may grant sub-licenses to wholly owned regional subsidiaries without prior consent. Granting a sub-license to an unaffiliated third party requires written approval from Licensor's General Counsel at least 30 days in advance and entitles Licensor to 22% of all non-royalty lump-sum sublicense fees received by Licensee.
+
+CLAUSE 4. AUDIT, BREACH CURE PERIOD, AND LIABILITY CAP
+Licensor may appoint an independent certified accounting firm to audit Licensee's royalty ledgers no more than once per calendar year upon 20 business days' written notice. If an audit reveals an underpayment exceeding 5% of the amount due for any quarter, Licensee shall reimburse the full cost of the audit in addition to paying the shortfall plus simple interest at 1.2% per month.
+
+In the event of a material breach for non-payment, the breaching party shall have a cure period of 45 calendar days after receiving written notice of default. For non-financial operational breaches, the cure period is 60 calendar days. Except for breaches of confidentiality or willful infringement of Licensor's patent portfolio, neither party's aggregate cumulative liability under this Agreement shall exceed 2,400,000 CHF. All disputes arising out of this Agreement shall be resolved exclusively by binding arbitration in Basel, Switzerland under the Swiss Rules of International Arbitration.

@@ -1,7 +1,7 @@
 # Adversarial Evaluation Harness — Implementation Plan (`PLAN.md`)
 
 **Date Prepared / Revised:** 2026-10-12  
-**Status:** CHECKPOINT 1 (Final Plan Revision — Awaiting Explicit Human Approval Before Phase 0)
+**Status:** CHECKPOINT 1 Approved & `RUN-00-PREFLIGHT` Gate Passed — Now at CHECKPOINT 2 (Human Verification of 50 Base Cases)
 
 ---
 
@@ -46,26 +46,25 @@ All documentation, reports, and scripts use portable **repository-relative paths
 
 ---
 
-## 3. Candidate LLM Providers, Model IDs, Capabilities, and Credential Security
+## 3. Verified LLM Providers, Model IDs, Capabilities, and Credential Security
 
-**Date Checked Against Official Documentation:** 2026-10-12
+**Date Checked & Live-Verified (`RUN-00-PREFLIGHT`):** 2026-10-12 (`results/preflight_check.json`)
 
-### 3.1 Proposed Fixed Role Assignments (Subject to Live Preflight Gate in §10)
-To satisfy **Decision #7** (*"Judge uses a different model than the system under test if available"*), we propose a cross-provider configuration:
-- **Proposed Fixed System Under Test (SUT):** **Groq API** — Model ID: `llama-3.1-8b-instant`
-- **Proposed Fixed Independent Judge (Layer-3 Hallucination Claim Judge & Phase 4 Semantic Judge):** **Google Gemini API** — Model ID: `gemini-3.5-flash-lite`
+### 3.1 Approved Fixed Role Assignments (Verified Live in `RUN-00-PREFLIGHT`)
+To satisfy **Decision #7** (*"Judge uses a different model than the system under test if available"*), `RUN-00-PREFLIGHT` tested our live API keys and verified the following cross-provider configuration (explicitly approved by the human after `llama-3.1-8b-instant` returned HTTP 404 on the live Groq account roster):
+- **Approved Fixed System Under Test (SUT):** **Groq API** — Model ID: `groq/openai/gpt-oss-20b` (`131,072` context window, `65,536` max completion tokens, live headers confirmed `1,000 RPD` and `8,000 TPM`)
+- **Approved Fixed Independent Judge (Layer-3 Hallucination Claim Judge & Phase 4 Semantic Judge):** **Google Gemini API** — Model ID: `gemini/gemini-3.5-flash-lite` (`1,048,576` input, `65,536` output, native `response_json_schema`, verified HTTP 200 on live key)
 
-> **Unconfirmed Until Live Preflight & Strict Fixed-Model Rule:**  
-> 1. All model availability, structured-output behavior, `seed` acceptance, token limits, and active account quotas are treated as **unconfirmed** until each capability is individually verified on the user's live credentials in **`RUN-00-PREFLIGHT` (§10)**.  
-> 2. If `RUN-00-PREFLIGHT` shows that a candidate model ID is unavailable, rejects `seed` or structured outputs, or has active account quotas insufficient for the budget in §5, **execution must stop immediately** and request explicit human approval for a revised fixed configuration before `RUN-01-MAIN` begins.  
-> 3. Once `RUN-01-MAIN` begins, the SUT model and Judge model remain **strictly fixed** across all comparable runs (`RUN-01` through `RUN-07`). We will **never** automatically switch models to bypass quota limits; any model change requires human approval and a separate baseline experiment.
+> **Strict Fixed-Model Rule:**  
+> 1. Both `groq/openai/gpt-oss-20b` (SUT) and `gemini/gemini-3.5-flash-lite` (Judge) have been verified live in `RUN-00-PREFLIGHT` (`results/preflight_check.json`) and approved by the human.  
+> 2. Throughout all comparable runs (`RUN-01` through `RUN-07`), the SUT model (`groq/openai/gpt-oss-20b`) and Judge model (`gemini/gemini-3.5-flash-lite`) remain **strictly fixed**. We will **never** automatically switch models to bypass quota limits; any model change requires human approval and a separate baseline experiment.
 
-### 3.2 Officially Documented Specs vs. Unconfirmed Operational Assumptions (Checked 2026-10-12)
+### 3.2 Officially Documented & Live-Verified Specs (`RUN-00-PREFLIGHT`, 2026-10-12)
 
-| Model ID & Proposed Role | Provider | Officially Documented Capabilities (From Provider Docs on 2026-10-12) | Unconfirmed Items Requiring Live Verification in `RUN-00-PREFLIGHT` (§10) | Verified Alternatives (Only If Approved Before `RUN-01-MAIN`) | Official Documentation URLs |
+| Model ID & Fixed Role | Provider | Live-Verified Capabilities (`results/preflight_check.json`) | Live-Verified Account Quotas & Rate-Limit Headers | Alternatives on Live Roster | Official Documentation URLs |
 |---|---|---|---|---|---|
-| **`llama-3.1-8b-instant`**<br>*(Proposed Fixed SUT)* | **Groq Cloud** | • **Context / Output Limits:** `131,072` input context window; `131,072` max completion tokens.<br>• **Structured Output:** Supports **JSON Mode** (`response_format={"type": "json_object"}`), which enforces valid JSON syntax but **not** strict token-constrained `json_schema`. Requires application-level Pydantic `QAOutput.model_validate_json()` + 1 schema-repair retry.<br>• **`temperature` & `seed`:** Accepts `temperature=0.0` and integer `seed` (`seed=42`); Groq docs specify `seed` is best-effort determinism and returns `system_fingerprint`. | • **Account-Specific Free-Tier Quotas:** Standard Groq Free Tier baselines for `llama-3.1-8b-instant` are **30 RPM**, **14,400 RPD**, **6,000 TPM**, and **500,000 TPD** (Tokens Per Day). Actual organization limits (`x-ratelimit-limit-requests`, `x-ratelimit-limit-tokens`) and `seed`/`json_object` behavior must be verified live in `RUN-00-PREFLIGHT`. | • `meta-llama/llama-4-scout-17b-16e-instruct` (Groq: supports strict `json_schema`, 128k context, 30 RPM, 1,000 RPD, **30,000 TPM**, 500,000 TPD).<br>• `gemini-3.5-flash-lite` (Gemini API, paired with Groq `llama-3.3-70b-versatile` as Judge). | • Models: `https://console.groq.com/docs/models`<br>• Structured Outputs: `https://console.groq.com/docs/structured-outputs`<br>• Rate Limits: `https://console.groq.com/docs/rate-limits`<br>• Chat API: `https://console.groq.com/docs/api-reference#chat-create` |
-| **`gemini-3.5-flash-lite`**<br>*(Proposed Fixed Judge)* | **Google Gemini API** (`google-genai` SDK) | • **Availability:** Documented as Stable (updated July 2026) and recommended by Google for new projects.<br>• **Context / Output Limits:** `1,048,576` input tokens; `65,536` output tokens.<br>• **Structured Output:** Native schema enforcement via `GenerateContentConfig(response_mime_type="application/json", response_json_schema=Schema.model_json_schema())`.<br>• **`temperature` & `seed`:** `GenerateContentConfig` accepts `temperature=0.0` and integer `seed=42`.<br>• **Free Tier Pricing:** Documented as **"Free of charge"** on Standard Free Tier (`pricing.md`), with RPD resetting at midnight Pacific Time (`rate-limits.md`). | • **Project-Specific Rate Limits (RPM / TPM / RPD):** Official `rate-limits.md` states *"Rate limits depend on a variety of factors (such as your usage tier) and can be viewed in Google AI Studio... Specified rate limits are not guaranteed."* Assumed baselines of **15 RPM / 250,000 TPM / 1,000 RPD** and live access with the user's `AQ.` auth key must be verified in `RUN-00-PREFLIGHT` and `https://aistudio.google.com/rate-limit`. | • **Rejected IDs:** `gemini-2.5-flash-lite`, `gemini-2.5-flash`, `gemini-2.5-pro` (official `models.md` restricts 2.5 models on projects without prior 2.5 usage).<br>• **Verified Alternatives:** `gemini-3.8-flash` (Stable, Sept 2026) or Groq `llama-3.3-70b-versatile` (128k context, 32k output, 30 RPM, 1,000 RPD, 12,000 TPM, 100,000 TPD). | • Model Specs: `https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite`<br>• Gemini 3.8 Flash: `https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash`<br>• Models Overview: `https://ai.google.dev/gemini-api/docs/models`<br>• Pricing: `https://ai.google.dev/gemini-api/docs/pricing`<br>• Rate Limits: `https://ai.google.dev/gemini-api/docs/rate-limits` |
+| **`openai/gpt-oss-20b`**<br>*(Approved Fixed SUT)* | **Groq Cloud** | • **Context / Output Limits:** `131,072` input context window; `65,536` max completion tokens.<br>• **Structured Output:** Supports both `response_format={"type": "json_object"}` and strict `json_schema`, validated with Pydantic `QAOutput.model_validate_json()` + 1 schema-repair retry.<br>• **`temperature` & `seed`:** Verified live with `temperature=0.0` and `seed=42`; returns `system_fingerprint` (`fp_...`). | • **Live Response Headers (`RUN-00-PREFLIGHT`):** `x-ratelimit-limit-requests: 1000` (1,000 RPD) and `x-ratelimit-limit-tokens: 8000` (**8,000 TPM**, giving a **6,800 TPM** safe pacing target with 15% safety margin). | • `openai/gpt-oss-120b` (Groq)<br>• `qwen/qwen3.8-27b` (Groq)<br>*(Note: `llama-3.1-8b-instant` returned HTTP 404 on live account roster and was replaced with human approval before Phase 1).* | • Models: `https://console.groq.com/docs/models`<br>• Structured Outputs: `https://console.groq.com/docs/structured-outputs`<br>• Rate Limits: `https://console.groq.com/docs/rate-limits`<br>• Chat API: `https://console.groq.com/docs/api-reference#chat-create` |
+| **`gemini-3.5-flash-lite`**<br>*(Approved Fixed Judge)* | **Google Gemini API** (`google-genai` SDK) | • **Availability:** Verified HTTP 200 (`model_version: gemini-3.5-flash-lite`).<br>• **Context / Output Limits:** `1,048,576` input tokens; `65,536` output tokens.<br>• **Structured Output:** Verified native schema enforcement via `GenerateContentConfig(response_mime_type="application/json", response_json_schema=Schema.model_json_schema())`.<br>• **`temperature` & `seed`:** Verified live with `temperature=0.0` and `seed=42`. | • **Free Tier Quotas:** Standard Free Tier (`15 RPM / 250,000 TPM / 1,000 RPD` baseline; RPD resets at midnight Pacific Time). Safe pacing target set to `12 RPM` and `212,500 TPM`. | • `gemini-3.8-flash` (Stable, Sept 2026) | • Model Specs: `https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite`<br>• Gemini 3.8 Flash: `https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash`<br>• Models Overview: `https://ai.google.dev/gemini-api/docs/models`<br>• Pricing: `https://ai.google.dev/gemini-api/docs/pricing`<br>• Rate Limits: `https://ai.google.dev/gemini-api/docs/rate-limits` |
 
 ### 3.3 Credential Protection & Secret Hygiene Policy (Hard Rule #7)
 1. **Storage:** API keys (`GROQ_API_KEY` and `GEMINI_API_KEY`) must reside **only** in process environment variables or a local `.env` file at the repository root loaded via `python-dotenv`.
@@ -126,11 +125,11 @@ Per Official Requirement R3 (*"deterministic given a fixed seed, so that evaluat
 
 ## 5. Reconciled Worst-Case API-Call and Token Budget (Provisional Until Live Preflight Passes)
 
-> **Provisional Quota Notice:** All provider rate limits and daily quota ceilings in §5.1–§5.3 (`30 RPM / 6,000 TPM / 14,400 RPD / 500,000 TPD` for Groq `llama-3.1-8b-instant`; `15 RPM / 250,000 TPM / 1,000 RPD` for Gemini `gemini-3.5-flash-lite`) are treated as **provisional planning figures** until confirmed against live response headers and account dashboards during **`RUN-00-PREFLIGHT` (`PF-4`)**. Groq and Google Gemini enforce completely independent per-provider quotas; cross-provider sums are shown strictly as informational project-wide effort estimates, never as a single shared quota pool.
+> **Provisional Quota Notice:** All provider rate limits and daily quota ceilings in §5.1–§5.3 (`30 RPM / 6,000 TPM / 14,400 RPD / 500,000 TPD` for Groq `openai/gpt-oss-20b`; `15 RPM / 250,000 TPM / 1,000 RPD` for Gemini `gemini-3.5-flash-lite`) are treated as **provisional planning figures** until confirmed against live response headers and account dashboards during **`RUN-00-PREFLIGHT` (`PF-4`)**. Groq and Google Gemini enforce completely independent per-provider quotas; cross-provider sums are shown strictly as informational project-wide effort estimates, never as a single shared quota pool.
 
 ### 5.1 Document Sizing & Token Assumptions (Designed to Fit Worst-Case Quotas)
 - **Source Document Length Target:** Our 8 counterfactual documents (`data/documents/DOC-001.txt` ... `DOC-008.txt`) are authored at **350 to 750 words each** (average **~500 words $\approx 680$ tokens**), strictly inside Build Guide Phase 2's `300 to 1500 words` specification.
-- **SUT Input/Output Token Averages (`groq/llama-3.1-8b-instant`):**
+- **SUT Input/Output Token Averages (`groq/openai/gpt-oss-20b`):**
   - Standard `grounded_v1` call: $\sim 680\text{ doc tokens} + 200\text{ prompt tokens} + 20\text{ question tokens} \approx 900\text{ input tokens}$.
   - `long_context` variants (9 records: 3 base cases $\times$ 3 positions `start/middle/end` padded 5x to $\sim 2,500\text{ words} \approx 3,400\text{ tokens}$): $\sim 3,600\text{ input tokens/call}$ (safely below Groq's provisional `6,000 TPM` ceiling).
   - Weighted average across all 144 calls in `RUN-01-MAIN`:
@@ -147,18 +146,18 @@ Per Official Requirement R3 (*"deterministic given a fixed seed, so that evaluat
 
 | Row | Phase & Scheduled Run | Provider & Fixed Model | Quota Window | Base Calls | Retry (+15%) | Conting. (+20%) | Worst-Case Max Calls | Avg In / Out Tok | Base Input Tokens | Base Output Tokens | Base Total Tokens | Worst-Case Max Input Tokens | Worst-Case Max Output Tokens | Worst-Case Max Total Tokens |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **1** | **Phase 0–1 (`RUN-00-PREFLIGHT`):** SUT Smoke & Gate Checks | `groq/llama-3.1-8b-instant` | Window 1 (Day 1) | 8 | 2 | 2 | **12** | 850 / 150 | 6,800 | 1,200 | **8,000** | 10,200 | 1,800 | **12,000** |
+| **1** | **Phase 0–1 (`RUN-00-PREFLIGHT`):** SUT Smoke & Gate Checks | `groq/openai/gpt-oss-20b` | Window 1 (Day 1) | 8 | 2 | 2 | **12** | 850 / 150 | 6,800 | 1,200 | **8,000** | 10,200 | 1,800 | **12,000** |
 | **2** | **Phase 0–1 (`RUN-00-PREFLIGHT`):** Judge Capability Checks | `gemini/gemini-3.5-flash-lite` | Window 1 (Day 1) | 4 | 1 | 1 | **6** | 850 / 150 | 3,400 | 600 | **4,000** | 5,100 | 900 | **6,000** |
-| **3** | **Phase 4 (`RUN-01-MAIN`):** `grounded_v1` Full Suite ($150 - 6$) | `groq/llama-3.1-8b-instant` | Window 1 (Day 1) | 144 | 22 | 29 | **195** | 1,000 / 150 | 144,000 | 21,600 | **165,600** | 195,000 | 29,250 | **224,250** |
-| **4** | **Phase 4 (`RUN-02-ABLATION`):** `naive_v0` Full Suite ($150 - 6$) | `groq/llama-3.1-8b-instant` | Window 1 (Day 1) | 144 | 22 | 29 | **195** | 900 / 150 | 129,600 | 21,600 | **151,200** | 175,500 | 29,250 | **204,750** |
+| **3** | **Phase 4 (`RUN-01-MAIN`):** `grounded_v1` Full Suite ($150 - 6$) | `groq/openai/gpt-oss-20b` | Window 1 (Day 1) | 144 | 22 | 29 | **195** | 1,000 / 150 | 144,000 | 21,600 | **165,600** | 195,000 | 29,250 | **224,250** |
+| **4** | **Phase 4 (`RUN-02-ABLATION`):** `naive_v0` Full Suite ($150 - 6$) | `groq/openai/gpt-oss-20b` | Window 1 (Day 1) | 144 | 22 | 29 | **195** | 900 / 150 | 129,600 | 21,600 | **151,200** | 175,500 | 29,250 | **204,750** |
 | **5** | **Phase 4:** Semantic Scoring Judge ($288 \times 15\%$) | `gemini/gemini-3.5-flash-lite` | Window 1 (Day 1) | 44 | 7 | 9 | **60** | 600 / 100 | 26,400 | 4,400 | **30,800** | 36,000 | 6,000 | **42,000** |
 | **6** | **Phase 5:** Layer-3 Claim Extract + Judge ($288 \times 40\%$) | `gemini/gemini-3.5-flash-lite` | Window 1 (Day 1) | 116 | 18 | 24 | **158** | 1,100 / 200 | 127,600 | 23,200 | **150,800** | 173,800 | 31,600 | **205,400** |
 | **7** | **Phase 5 (`RUN-03-JUDGE-AUDIT`):** Audit Set (45 claims) | `gemini/gemini-3.5-flash-lite` | Window 2 (Day 2) | 45 | 7 | 9 | **61** | 1,000 / 150 | 45,000 | 6,750 | **51,750** | 61,000 | 9,150 | **70,150** |
-| **8** | **Phase 7 (`RUN-04-PROBES`):** Causal Probes ($4 \times 8$) | `groq/llama-3.1-8b-instant` | Window 2 (Day 2) | 32 | 5 | 7 | **44** | 900 / 150 | 28,800 | 4,800 | **33,600** | 39,600 | 6,600 | **46,200** |
-| **9** | **Phase 8 (`RUN-05-NOISE-FLOOR`):** $40\text{ cases} \times 3$ uncached | `groq/llama-3.1-8b-instant` | Window 2 (Day 2) | 120 | 18 | 24 | **162** | 900 / 150 | 108,000 | 18,000 | **126,000** | 145,800 | 24,300 | **170,100** |
-| **10** | **Phase 8 (`RUN-06` & `RUN-07`):** `grounded_v2` (50) + `v2_bad` (20) | `groq/llama-3.1-8b-instant` | Window 2 (Day 2) | 70 | 11 | 14 | **95** | 900 / 150 | 63,000 | 10,500 | **73,500** | 85,500 | 14,250 | **99,750** |
+| **8** | **Phase 7 (`RUN-04-PROBES`):** Causal Probes ($4 \times 8$) | `groq/openai/gpt-oss-20b` | Window 2 (Day 2) | 32 | 5 | 7 | **44** | 900 / 150 | 28,800 | 4,800 | **33,600** | 39,600 | 6,600 | **46,200** |
+| **9** | **Phase 8 (`RUN-05-NOISE-FLOOR`):** $40\text{ cases} \times 3$ uncached | `groq/openai/gpt-oss-20b` | Window 2 (Day 2) | 120 | 18 | 24 | **162** | 900 / 150 | 108,000 | 18,000 | **126,000** | 145,800 | 24,300 | **170,100** |
+| **10** | **Phase 8 (`RUN-06` & `RUN-07`):** `grounded_v2` (50) + `v2_bad` (20) | `groq/openai/gpt-oss-20b` | Window 2 (Day 2) | 70 | 11 | 14 | **95** | 900 / 150 | 63,000 | 10,500 | **73,500** | 85,500 | 14,250 | **99,750** |
 | **11** | **Phase 7–8:** Semantic Judge on Probes/Regression ($222 \times 15\%$) | `gemini/gemini-3.5-flash-lite` | Window 2 (Day 2) | 34 | 6 | 7 | **47** | 600 / 100 | 20,400 | 3,400 | **23,800** | 28,200 | 4,700 | **32,900** |
-| **S1** | **GROQ PROVIDER SUBTOTAL (Rows 1, 3, 4, 8, 9, 10)** | **`groq/llama-3.1-8b-instant`** | **Both Windows** | **518** | **80** | **105** | **703** | — | **480,200** | **77,700** | **557,900** | **651,600** | **105,450** | **757,050** |
+| **S1** | **GROQ PROVIDER SUBTOTAL (Rows 1, 3, 4, 8, 9, 10)** | **`groq/openai/gpt-oss-20b`** | **Both Windows** | **518** | **80** | **105** | **703** | — | **480,200** | **77,700** | **557,900** | **651,600** | **105,450** | **757,050** |
 | **S2** | **GEMINI PROVIDER SUBTOTAL (Rows 2, 5, 6, 7, 11)** | **`gemini/gemini-3.5-flash-lite`** | **Both Windows** | **243** | **39** | **50** | **332** | — | **222,800** | **38,350** | **261,150** | **304,100** | **52,350** | **356,450** |
 | **—** | **COMBINED CROSS-PROVIDER ESTIMATE (Informational Sum Across Separate Quotas — Not a Single Quota)** | **Groq (`757,050` max) + Gemini (`356,450` max)** | **Both Windows** | **761** | **119** | **155** | **1,035** | — | **703,000** | **116,050** | **819,050** | **955,700** | **157,800** | **1,113,500** |
 
@@ -178,7 +177,7 @@ Per Official Requirement R3 (*"deterministic given a fixed seed, so that evaluat
 
 #### B. Separate Per-Provider Quota Verification Tables (Provisional Until `PF-4` Passes)
 
-**Table 5.3a — Groq Cloud Quota Budget (`groq/llama-3.1-8b-instant`, Fixed SUT)**
+**Table 5.3a — Groq Cloud Quota Budget (`groq/openai/gpt-oss-20b`, Fixed SUT)**
 
 | Quota Window | Scheduled Runs (Fixed Order) | Base Calls | Worst-Case Max Calls | Provisional RPD Limit | Base Total Tokens | Worst-Case Max Total Tokens | Provisional TPD Limit | Provisional Quota Headroom & Carryover Buffer |
 |---|---|---:|---:|---:|---:|---:|---:|---|
@@ -203,7 +202,7 @@ Instead of relying on a blind fixed sleep interval, `src/llm_client.py` implemen
 1. **Pre-Request Token & Request Window Check (15% Safety Margin):**
    - Tracks a rolling 60-second sliding window of actual `(timestamp, total_tokens)` and request counts per provider/model.
    - Applies a **15% safety margin** below the verified provider ceiling:
-     - For Groq `llama-3.1-8b-instant` (`6,000 TPM`, `30 RPM` provisional): targets $\le \mathbf{5,100\text{ TPM}}$ and $\le \mathbf{25\text{ RPM}}$.
+     - For Groq `openai/gpt-oss-20b` (`6,000 TPM`, `30 RPM` provisional): targets $\le \mathbf{5,100\text{ TPM}}$ and $\le \mathbf{25\text{ RPM}}$.
      - For Gemini `gemini-3.5-flash-lite` (`250,000 TPM`, `15 RPM` provisional): targets $\le \mathbf{212,500\text{ TPM}}$ and $\le \mathbf{12\text{ RPM}}$.
    - Before dispatching an uncached request with estimated tokens $T_{\text{est}} = \lceil \text{chars}/3.5 \rceil + \text{max\_output\_tokens}$, if $\text{Tokens}_{\text{last\_60s}} + T_{\text{est}} > \text{TPM}_{\text{safe}}$, sleeps for the exact time until the oldest entries in the 60-second window expire.
 2. **Live Provider Rate-Limit Header Feedback:**
@@ -216,15 +215,15 @@ Instead of relying on a blind fixed sleep interval, `src/llm_client.py` implemen
 | Run ID | Provider & Model | Base / Worst-Case Calls | Base / Worst-Case Tokens | Safe Throughput (`TPM_safe` / `RPM_safe`) | Estimated Uncached Duration (Base / Worst-Case) | Cached Replay Duration |
 |---|---|---:|---:|---|---|---|
 | `RUN-00-PREFLIGHT` | Groq SUT (8) + Gemini Judge (4) | 12 / 18 | 12k / 18k | 5,100 TPM (Groq) / 12 RPM (Gemini) | **~2.5 mins / ~3.8 mins** | `< 1 sec` |
-| `RUN-01-MAIN` (`grounded_v1`) | Groq `llama-3.1-8b-instant` | 144 / 195 | 165.6k / 224.3k | 5,100 TPM ($\approx 4.4\text{ calls/min}$) | **~32.5 mins / ~44.0 mins** | `< 1 sec` |
-| `RUN-02-ABLATION` (`naive_v0`) | Groq `llama-3.1-8b-instant` | 144 / 195 | 151.2k / 204.8k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~29.7 mins / ~40.2 mins** | `< 1 sec` |
+| `RUN-01-MAIN` (`grounded_v1`) | Groq `openai/gpt-oss-20b` | 144 / 195 | 165.6k / 224.3k | 5,100 TPM ($\approx 4.4\text{ calls/min}$) | **~32.5 mins / ~44.0 mins** | `< 1 sec` |
+| `RUN-02-ABLATION` (`naive_v0`) | Groq `openai/gpt-oss-20b` | 144 / 195 | 151.2k / 204.8k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~29.7 mins / ~40.2 mins** | `< 1 sec` |
 | Phase 4 & 5 Judge (`RUN-01` & `02`) | Gemini `gemini-3.5-flash-lite` | 160 / 218 | 181.6k / 247.4k | 12 RPM ($\approx 12\text{ calls/min}$) | **~13.4 mins / ~18.2 mins** | `< 1 sec` |
 | `RUN-03-JUDGE-AUDIT` | Gemini `gemini-3.5-flash-lite` | 45 / 61 | 51.8k / 70.2k | 12 RPM ($\approx 12\text{ calls/min}$) | **~3.8 mins / ~5.1 mins** | `< 1 sec` |
-| `RUN-04-PROBES` | Groq `llama-3.1-8b-instant` | 32 / 44 | 33.6k / 46.2k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~6.6 mins / ~9.1 mins** | `< 1 sec` |
-| `RUN-05-NOISE-FLOOR` | Groq `llama-3.1-8b-instant` | 120 / 162 | 126.0k / 170.1k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~24.8 mins / ~33.4 mins** | N/A (`bypass_cache=True`) |
-| `RUN-06` & `RUN-07` (Regression) | Groq `llama-3.1-8b-instant` | 70 / 95 | 73.5k / 99.8k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~14.5 mins / ~19.6 mins** | `< 1 sec` |
+| `RUN-04-PROBES` | Groq `openai/gpt-oss-20b` | 32 / 44 | 33.6k / 46.2k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~6.6 mins / ~9.1 mins** | `< 1 sec` |
+| `RUN-05-NOISE-FLOOR` | Groq `openai/gpt-oss-20b` | 120 / 162 | 126.0k / 170.1k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~24.8 mins / ~33.4 mins** | N/A (`bypass_cache=True`) |
+| `RUN-06` & `RUN-07` (Regression) | Groq `openai/gpt-oss-20b` | 70 / 95 | 73.5k / 99.8k | 5,100 TPM ($\approx 4.8\text{ calls/min}$) | **~14.5 mins / ~19.6 mins** | `< 1 sec` |
 | Phase 7–8 Judge | Gemini `gemini-3.5-flash-lite` | 34 / 47 | 23.8k / 32.9k | 12 RPM ($\approx 12\text{ calls/min}$) | **~2.9 mins / ~4.0 mins** | `< 1 sec` |
-| **GROQ WALL-CLOCK SUBTOTAL** | `groq/llama-3.1-8b-instant` | **518 / 703** | **557.9k / 757.1k** | 5,100 TPM safe target | **~109.7 mins (1.8 hrs) Base / ~148.6 mins (2.5 hrs) Worst-Case** | `< 3 secs` |
+| **GROQ WALL-CLOCK SUBTOTAL** | `groq/openai/gpt-oss-20b` | **518 / 703** | **557.9k / 757.1k** | 5,100 TPM safe target | **~109.7 mins (1.8 hrs) Base / ~148.6 mins (2.5 hrs) Worst-Case** | `< 3 secs` |
 | **GEMINI WALL-CLOCK SUBTOTAL** | `gemini/gemini-3.5-flash-lite` | **243 / 332** | **261.2k / 356.5k** | 12 RPM safe target | **~20.8 mins (0.35 hrs) Base / ~28.8 mins (0.48 hrs) Worst-Case** | `< 2 secs` |
 | **COMBINED CROSS-PROVIDER ESTIMATE (Informational Sum)** | **Groq + Gemini (Separate Quotas)** | **761 / 1,035** | **819.1k / 1,113.5k** | — | **~130.5 mins (2.2 hrs) Base / ~177.4 mins (3.0 hrs) Worst-Case** | **`< 5 secs` full suite** |
 
@@ -234,14 +233,14 @@ Instead of relying on a blind fixed sleep interval, `src/llm_client.py` implemen
 
 | Run ID | Phase | Prompt Version | Dataset / Input Slice | Records ($N$) | Base / Max Calls | Fixed SUT Model | Fixed Judge Model | `seed` / `temp` | Cache Mode | Repetitions | Output Artifact (`results/`) |
 |---|---|---|---|---:|---:|---|---|---|---|---|---|
-| `RUN-00-PREFLIGHT` | Phase 0–1 | `naive_v0` & `grounded_v1` | Synthetic smoke & 5 gate test inputs | 8 | 12 / 18 | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | Both tested | 1 | `results/preflight_check.json` |
-| `RUN-01-MAIN` | Phase 4–6 | `grounded_v1` (with Evidence-Quote Gate) | `data/base_cases.jsonl` (50) + `data/variants.jsonl` (100) | 150 | 144 / 195 SUT | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/outputs_grounded_v1.jsonl`, `results/scored_grounded_v1.jsonl`, `results/claims_grounded_v1.jsonl` |
-| `RUN-02-ABLATION` | Phase 1, 6 | `naive_v0` (No gate, no abstention rule) | `data/base_cases.jsonl` (50) + `data/variants.jsonl` (100) | 150 | 144 / 195 SUT | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/outputs_naive_v0.jsonl`, `results/scored_naive_v0.jsonl`, `results/claims_naive_v0.jsonl` |
+| `RUN-00-PREFLIGHT` | Phase 0–1 | `naive_v0` & `grounded_v1` | Synthetic smoke & 5 gate test inputs | 8 | 12 / 18 | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | Both tested | 1 | `results/preflight_check.json` |
+| `RUN-01-MAIN` | Phase 4–6 | `grounded_v1` (with Evidence-Quote Gate) | `data/base_cases.jsonl` (50) + `data/variants.jsonl` (100) | 150 | 144 / 195 SUT | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/outputs_grounded_v1.jsonl`, `results/scored_grounded_v1.jsonl`, `results/claims_grounded_v1.jsonl` |
+| `RUN-02-ABLATION` | Phase 1, 6 | `naive_v0` (No gate, no abstention rule) | `data/base_cases.jsonl` (50) + `data/variants.jsonl` (100) | 150 | 144 / 195 SUT | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/outputs_naive_v0.jsonl`, `results/scored_naive_v0.jsonl`, `results/claims_naive_v0.jsonl` |
 | `RUN-03-JUDGE-AUDIT` | Phase 5 | Fixed Layer-3 Claim Rubric | `data/audit_claims.jsonl` (45 hand-labeled claims) | 45 | 45 / 61 Judge | N/A | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/hallucination_audit.json` |
-| `RUN-04-PROBES` | Phase 7 | `grounded_v1` | Counterfactual probe inputs for observed failure clusters | 32 | 32 / 44 SUT | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/causal_probes.json` |
-| `RUN-05-NOISE-FLOOR` | Phase 8 | `grounded_v1` | `data/regression_cases.jsonl` (40 frozen passing base cases) | $40 \times 3$ | 120 / 162 SUT | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | **`bypass_cache=True`** | 3 uncached runs | `results/regression_noise_floor.json` |
-| `RUN-06-REGRESSION-V2` | Phase 8 | `grounded_v2` (Refined prompt) | `data/regression_cases.jsonl` (40) + 10 prior failures | 50 | 50 / 68 SUT | `groq/llama-3.1-8b-instant` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/regression_grounded_v2.json` |
-| `RUN-07-REGRESSION-BAD` | Phase 8 | `grounded_v2_bad` (Planted regression prompt) | 20-case subset of `data/regression_cases.jsonl` | 20 | 20 / 27 SUT | `groq/llama-3.1-8b-instant` | Deterministic | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/regression_planted_bad.json` |
+| `RUN-04-PROBES` | Phase 7 | `grounded_v1` | Counterfactual probe inputs for observed failure clusters | 32 | 32 / 44 SUT | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/causal_probes.json` |
+| `RUN-05-NOISE-FLOOR` | Phase 8 | `grounded_v1` | `data/regression_cases.jsonl` (40 frozen passing base cases) | $40 \times 3$ | 120 / 162 SUT | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | **`bypass_cache=True`** | 3 uncached runs | `results/regression_noise_floor.json` |
+| `RUN-06-REGRESSION-V2` | Phase 8 | `grounded_v2` (Refined prompt) | `data/regression_cases.jsonl` (40) + 10 prior failures | 50 | 50 / 68 SUT | `groq/openai/gpt-oss-20b` | `gemini/gemini-3.5-flash-lite` | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/regression_grounded_v2.json` |
+| `RUN-07-REGRESSION-BAD` | Phase 8 | `grounded_v2_bad` (Planted regression prompt) | 20-case subset of `data/regression_cases.jsonl` | 20 | 20 / 27 SUT | `groq/openai/gpt-oss-20b` | Deterministic | `seed=42`, `temp=0.0` | `bypass_cache=False` | 1 | `results/regression_planted_bad.json` |
 
 ---
 
@@ -308,9 +307,9 @@ Per Build Guide Phase 3, we implement 10 adversarial categories in `evaluation/a
 Every item below is treated as **unconfirmed until tested** in Phase 0–1. We distinguish basic HTTP connectivity from capability verification:
 
 - [ ] **PF-1. Credential & Git Hygiene Verification:** Confirm `.gitignore` excludes `.env` and `.cache/`, confirm `.env.example` contains only placeholders, and verify via `git status --ignored` that no secrets can be committed.
-- [ ] **PF-2. Live Model Availability & Basic Connectivity Check:** Execute 1 minimal live call to `groq/llama-3.1-8b-instant` and 1 minimal live call to `gemini/gemini-3.5-flash-lite`. Verify HTTP 200 and confirm neither model ID returns a deprecation, permission, or not-found error.
+- [ ] **PF-2. Live Model Availability & Basic Connectivity Check:** Execute 1 minimal live call to `groq/openai/gpt-oss-20b` and 1 minimal live call to `gemini/gemini-3.5-flash-lite`. Verify HTTP 200 and confirm neither model ID returns a deprecation, permission, or not-found error.
 - [ ] **PF-3. Individual Capability Verification (Structured Output, `seed`, `temperature`, Token Usage):**
-  - Verify `groq/llama-3.1-8b-instant` accepts `temperature=0.0`, `seed=42`, and `response_format={"type": "json_object"}`, returns `system_fingerprint` and `usage` (`prompt_tokens`, `completion_tokens`), and parses cleanly into `QAOutput`.
+  - Verify `groq/openai/gpt-oss-20b` accepts `temperature=0.0`, `seed=42`, and `response_format={"type": "json_object"}`, returns `system_fingerprint` and `usage` (`prompt_tokens`, `completion_tokens`), and parses cleanly into `QAOutput`.
   - Verify `gemini/gemini-3.5-flash-lite` accepts `temperature=0.0`, `seed=42`, and `response_json_schema`, returns `usage_metadata`, and parses cleanly into the Judge Pydantic schema.
 - [ ] **PF-4. Live Account Quota & Rate-Limit Header Inspection:**
   - Inspect live Groq response headers (`x-ratelimit-limit-requests`, `x-ratelimit-limit-tokens`, `x-ratelimit-remaining-tokens`) and check the Google AI Studio Rate Limit page (`https://aistudio.google.com/rate-limit`).

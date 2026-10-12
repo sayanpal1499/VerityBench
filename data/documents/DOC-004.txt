@@ -1,0 +1,27 @@
+DOCUMENT ID: DOC-004
+TITLE: ChronosPay Ledger Gateway API — Developer Reference Manual (Version 3.4)
+LAST UPDATED: February 10, 2026
+MAINTAINER: Core Clearing Infrastructure Team
+
+1. AUTHENTICATION AND TRANSPORT SECURITY
+All requests to the ChronosPay Ledger Gateway v3.4 must be transmitted over HTTPS using TLS 1.3 to base endpoint `https://api.chronospay.internal/v3.4`. TLS 1.2 connections are rejected at the edge proxy with HTTP status 426 (Upgrade Required). Every request must include two authentication headers:
+- `X-Chronos-Key-ID`: The 24-character alphanumeric client identifier
+- `X-Chronos-Signature`: An HMAC-SHA384 hex digest computed over the concatenation of the Unix timestamp (in seconds), the HTTP method, and the raw request body.
+
+If the timestamp header `X-Chronos-Timestamp` differs from the gateway atomic clock by more than 45 seconds in either direction, the gateway rejects the request with error code `ERR_CLOCK_SKEW_904` (HTTP 401).
+
+2. RATE LIMITS AND PAYLOAD QUOTAS
+Rate limits are enforced per merchant organization using a token-bucket algorithm:
+- Standard Merchant Tier: 120 requests per minute (RPM) and a burst ceiling of 25 concurrent requests.
+- Enterprise Clearing Tier: 900 requests per minute (RPM) and a burst ceiling of 150 concurrent requests.
+- Legacy v2.9 Compatibility Endpoint (`/v2.9/settlements`): Restricted to 30 requests per minute (RPM) and scheduled for permanent sunset on October 31, 2026.
+
+The maximum uncompressed JSON request body size for `POST /v3.4/transfers/batch` is 2.5 MB (or a maximum of 500 individual transfer objects per batch, whichever limit is reached first). Payloads exceeding 2.5 MB or 500 items return HTTP 413 with error code `ERR_BATCH_OVERFLOW_413`.
+
+3. IDEMPOTENCY AND SETTLEMENT FINALITY
+All state-mutating `POST` and `PATCH` requests require a mandatory `Idempotency-Key` header containing a UUIDv7 string. The ChronosPay ledger caches idempotency keys and their exact response payloads in distributed memory for 36 hours. Sending a duplicate `Idempotency-Key` with an identical payload within 36 hours returns the cached response with header `X-Idempotent-Replay: true`. Sending the same `Idempotency-Key` with a modified request body returns HTTP 422 (`ERR_IDEMPOTENCY_MISMATCH_702`).
+
+Domestic instant transfers settle synchronously within 800 ms. Cross-border multi-currency transfers settle asynchronously and transition from `PENDING_FX` to `SETTLED` within 4 hours during normal clearing windows.
+
+4. WEBHOOK DELIVERY AND RETRY SCHEDULE
+When a transfer reaches a terminal state (`SETTLED`, `REJECTED`, or `REVERSED`), the gateway dispatches a signed `POST` webhook to the merchant's registered callback URL. The merchant server must respond with an HTTP 2xx status code within 4,000 ms (4 seconds). If the callback times out or returns HTTP 5xx, ChronosPay retries delivery up to 5 times at fixed backoff intervals of 1 minute, 5 minutes, 30 minutes, 2 hours, and 12 hours before moving the event to the Dead-Letter Queue (DLQ).

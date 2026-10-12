@@ -32,8 +32,13 @@ def normalize_text_for_quote_match(text: str) -> str:
         .replace("\u2019", "'")
         .replace("\u201a", "'")
         .replace("\u201b", "'")
+        .replace("\u2010", "-")
+        .replace("\u2011", "-")
+        .replace("\u2012", "-")
         .replace("\u2013", "-")
         .replace("\u2014", "-")
+        .replace("\u2015", "-")
+        .replace("\u2212", "-")
         .replace("\u00a0", " ")
     )
     # Collapse all whitespace sequences (spaces, tabs, newlines) into a single space

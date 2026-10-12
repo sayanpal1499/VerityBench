@@ -1,0 +1,26 @@
+DOCUMENT ID: DOC-002
+TITLE: Aethelgard Orbital Systems — Global Travel, Remote Work & Expense Policy (Policy Pol-HR-409)
+EFFECTIVE DATE: March 1, 2026
+APPROVED BY: Chief People Officer Henrik Vestergaard
+
+1. PURPOSE AND SCOPE
+This policy governs work-location eligibility, domestic and international business travel, meal reimbursement, and home-office stipends for all full-time salaried employees of Aethelgard Orbital Systems. External contractors, summer interns, and part-time advisors are excluded from these allowances and must follow Schedule B of their vendor agreements.
+
+2. HYBRID AND REMOTE WORK ELIGIBILITY
+Full-time employees in Software Engineering, Mission Analytics, and Legal Compliance may work remotely for up to 3 days per week, provided they attend in-person core collaboration days at their assigned hub every Tuesday and Thursday. By contrast, Propulsion Test Engineers and Cleanroom Technicians are classified as Mission-Critical On-Site Staff and are not eligible for regular remote work.
+
+Employees in Hybrid-Eligible roles may request a temporary "Work From Anywhere" (WFA) allocation of up to 14 consecutive calendar days per fiscal year. Every WFA request must be submitted through the Portal-X HR system at least 21 calendar days prior to departure and requires written sign-off from both the employee's direct Director and the Export Control Office.
+
+3. BUSINESS TRAVEL & FLIGHT BOOKING RULES
+All commercial air travel must be booked through the corporate Navan-Aethelgard portal at least 10 days before departure. Economy Class is mandatory for all single-leg flights with a scheduled gate-to-gate duration under 7 hours. Employees traveling on single-leg international flights of 7 hours or longer are authorized to book Premium Economy. Business Class airfare is restricted strictly to Vice Presidents and above, or to employees holding a documented medical accommodation approved by Occupational Health.
+
+4. LODGING AND DAILY MEAL PER DIEM CAPS
+Aethelgard reimburses actual reasonable hotel nightly rates (excluding room taxes) up to the following regional caps:
+- Tier-1 High-Cost Cities (Zurich, Tokyo, New York, London, Singapore): $310 USD per night
+- Tier-2 Standard Metro Areas (all other national capitals and regional hubs): $215 USD per night
+- Tier-3 Field Test Sites (Kiruna Launch Range and Mojave Annex): $145 USD per night
+
+Daily meal and incidental expenses are reimbursed up to a flat cap of $85 USD per day in Tier-1 cities and $60 USD per day in Tier-2 and Tier-3 locations. Alcohol, mini-bar purchases, in-room movies, and airline lounge day passes are strictly non-reimbursable under all tiers.
+
+5. HOME-OFFICE EQUIPMENT STIPEND & EXPENSE SUBMISSION DEADLINES
+Newly hired Hybrid-Eligible full-time employees receive a one-time home-office ergonomic stipend of $650 USD upon completing their 90-day probationary period. All itemized receipts over $25 USD must be uploaded to the Concur-Aethelgard ledger within 30 calendar days of the transaction date. Claims submitted between 31 and 60 days after the transaction incur a mandatory 15% administrative late deduction, and any expense claim submitted more than 60 calendar days after the transaction date is automatically forfeited without exception.

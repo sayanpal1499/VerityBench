@@ -1,0 +1,31 @@
+DOCUMENT ID: DOC-008
+TITLE: StratosVault Sovereign Cloud — Tier-0 Object Storage Service Level Agreement & Cryptographic Standard
+SPECIFICATION ID: SV-SLA-T0-2026
+EFFECTIVE DATE: April 1, 2026
+ISSUING AUTHORITY: Sovereign Infrastructure Governance Board (Geneva)
+
+1. SERVICE TIER DEFINITIONS AND REPLICATION TOPOLOGY
+StratosVault Tier-0 Sovereign Object Storage ("Tier-0") provides geo-redundant immutable storage for regulated financial and defense workloads within the Alpine Sovereign Zone. Every object written to a Tier-0 bucket is synchronously erasure-coded across three underground data centers located in Lucerne (Site Alpha), Bern (Site Beta), and Lugano (Site Gamma) before an HTTP 201 Write Acknowledgement is returned to the client.
+
+By contrast, StratosVault Tier-1 Standard Storage replicates data asynchronously across only two sites (Lucerne and Bern) with a replication lag window of up to 90 seconds, and StratosVault Cold-Archive Deep Vault stores magnetic tape shards in a single facility in Andermatt.
+
+2. CRYPTOGRAPHIC ENCRYPTION & KEY ROTATION MANDATES
+All Tier-0 objects undergo envelope encryption prior to disk commit:
+- Data-at-rest payload blocks are encrypted using AES-256-GCM combined with a post-quantum ML-KEM-1024 key encapsulation wrapper.
+- Customer Master Keys (CMKs) reside inside FIPS 140-3 Level 4 Hardware Security Modules (HSMs) manufactured by SecuroSys.
+- Root Key-Encryption Keys (KEKs) are rotated automatically every 90 calendar days, whereas per-bucket Data-Encryption Keys (DEKs) are rotated every 24 hours or after encrypting 500 GB of data, whichever occurs first.
+
+If a tenant initiates an emergency cryptographic shred ("Crypto-Erase"), all HSM-held key shares across Sites Alpha, Beta, and Gamma are zeroized within 18 seconds, rendering stored ciphertext permanently unrecoverable.
+
+3. AVAILABILITY GUARANTEE, RTO/RPO, AND SERVICE CREDIT SCHEDULE
+StratosVault guarantees a Monthly Uptime Percentage of at least 99.995% for Tier-0 read and write operations (corresponding to no more than 2.16 minutes of unplanned downtime per 30-day billing month). For Tier-0 workloads, the Recovery Point Objective (RPO) is 0 seconds (zero data loss) and the Recovery Time Objective (RTO) for automatic site failover is 15 seconds.
+
+If Monthly Uptime Percentage for a Tier-0 bucket falls below 99.995% in any billing month, the customer is eligible for Service Credits applied against the next monthly invoice:
+- Uptime between 99.95% and 99.994%: 15% Service Credit
+- Uptime between 99.50% and 99.949%: 35% Service Credit
+- Uptime below 99.50%: 100% Service Credit
+
+To receive a Service Credit, the tenant must file a support claim in the StratosVault Governance Portal within 14 calendar days after the end of the billing month in which the outage occurred.
+
+4. RETRIEVAL LATENCY AND RETENTION LOCKS
+First-byte read latency (TTFB) for Tier-0 objects up to 64 MB is guaranteed at or below 12 ms at the 99th percentile (P99). By comparison, Cold-Archive Deep Vault retrieval requires a 3.5-hour robotic tape mount and staging window. Objects placed under Compliance WORM (Write-Once-Read-Many) Retention Lock have a minimum lock duration of 30 days and a maximum lock duration of 35 years; locked objects cannot be deleted even by the tenant's Root Administrator prior to lock expiration.

@@ -1,0 +1,28 @@
+DOCUMENT ID: DOC-001
+TITLE: Helios-X9 Cryogenic Telemetry & Power Controller — Engineering Datasheet (Revision D)
+MANUFACTURER: Vaelen MicroSystems GmbH (Dresden Facility)
+RELEASE DATE: November 14, 2025
+
+1. GENERAL OVERVIEW
+The Helios-X9 is a radiation-hardened cryogenic telemetry and power management microcontroller designed for deep-space probes and sub-Kelvin dilution refrigerators. Unlike commercial silicon controllers that suffer carrier freeze-out below -55 °C, the Helios-X9 uses a proprietary germanium-on-sapphire substrate certified by lead architect Dr. Maren Lindqvist. All production wafers are fabricated exclusively at Vaelen MicroSystems Fab-4 in Dresden and packaged in a 144-pin ceramic quad flat pack (CQFP-144).
+
+2. ELECTRICAL & CLOCK SPECIFICATIONS
+Under nominal operation, the Helios-X9 requires a regulated core supply voltage of 3.3 V and an auxiliary I/O rail of 1.8 V. In active telemetry acquisition mode at 20 °C, the controller draws a continuous supply current of 42 mA. When placed into deep-hibernation mode, continuous current draw drops to 180 uA while retaining all 64 KB of ferroelectric non-volatile SRAM (FRAM).
+
+The primary system clock operates at a maximum frequency of 180 MHz when driven by an external 24 MHz quartz crystal oscillator. If the external crystal fails, an internal ring-oscillator watchdog automatically engages within 12 ms and locks the system clock to a fallback safe frequency of 16 MHz.
+
+3. SIBLING MODEL COMPARISON (HELIOS-X7 LEGACY SERIES)
+Engineers migrating from the older Helios-X7 controller must update their power regulator designs. The legacy Helios-X7 operates at a nominal core supply voltage of 5.0 V, draws 95 mA in active mode, and supports a maximum clock frequency of only 96 MHz. Furthermore, the Helios-X7 uses a 100-pin plastic package (PQFP-100) that is not pin-compatible with the CQFP-144 footprint of the Helios-X9.
+
+4. THERMAL LIMITS & PROTECTION CIRCUITS
+The Helios-X9 is rated for continuous operation across an ambient temperature range of -210 °C to +105 °C. An on-die platinum resistance sensor monitors junction temperature every 50 ms. If the junction temperature exceeds +115 °C, the hardware thermal-shutdown latch trips immediately, cutting power to the telemetry transceiver until the die cools below +85 °C.
+
+When ambient temperature falls below -150 °C, the integrated substrate bias generator activates automatically and adds 8 mA to the active-mode supply current. Combining the 42 mA baseline active current with the 8 mA bias generator draw yields a total active-mode current of 50 mA below -150 °C.
+
+5. SUPPORTED COMMUNICATION INTERFACES
+The Helios-X9 includes three hardware serial interfaces:
+- Dual redundant MIL-STD-1553B command buses operating at 1 Mbps
+- One isolated CAN-FD controller supporting payloads up to 64 bytes
+- Two master/slave SPI ports clocked up to 45 MHz
+
+Note: The Helios-X9 hardware omits UART, I2C, USB, and Ethernet controllers to minimize die area and single-event latch-up cross-section. External protocol bridges must be used if I2C sensor polling is required.

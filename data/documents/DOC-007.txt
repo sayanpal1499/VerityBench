@@ -1,0 +1,27 @@
+DOCUMENT ID: DOC-007
+TITLE: Nordic Maritime Safety Directorate — Autonomous Vessel Incident Investigation Bulletin #NMA-2025-88
+VESSEL NAME: MV Borealis-IV (IMO Registry: 9948102, Unmanned Coastal Cargo Carrier)
+INCIDENT DATE: October 19, 2025
+BULLETIN ISSUED: January 9, 2026
+
+1. INCIDENT SUMMARY
+At 03:42 UTC on October 19, 2025, the 78-meter autonomous battery-electric container feeder MV Borealis-IV executed an uncommanded emergency full-astern stop and dropped both bow anchors 4.6 nautical miles west of the Hjeltefjorden traffic separation scheme near Bergen, Norway. The vessel was carrying 112 containerized cargo units at a service speed of 11.5 knots under remote supervision from the Haugesund Shore Control Center (SCC). No hull breach, collision, or environmental discharge occurred.
+
+2. PROPULSION AND SENSOR ARCHITECTURE
+MV Borealis-IV is powered by dual permanent-magnet azimuth thrusters rated at 1,800 kW each, supplied by a 6.4 MWh liquid-cooled lithium-iron-phosphate (LFP) main battery bank divided into Port and Starboard fire-isolated compartments. Autonomous situational awareness is governed by the "NauticBrain-5" sensor fusion computer, which cross-checks three primary navigation feeds every 200 ms:
+- Forward W-band solid-state marine radar operating at 77 GHz
+- Dual roof-mounted 1550 nm LiDAR scanners
+- Port and Starboard long-wave thermal infrared cameras
+
+By contrast, the sister vessel MV Borealis-II uses an older X-band 9.4 GHz mechanically scanned radar and a smaller 4.2 MWh nickel-manganese-cobalt (NMC) battery bank.
+
+3. ROOT CAUSE SEQUENCE OF EVENTS
+Inspection of the non-volatile black-box telemetry log revealed that heavy freezing sea spray accumulated on the heated radome of the 77 GHz forward radar at 03:38 UTC, attenuating radar return power by 19 dB. Under normal firmware rules, NauticBrain-5 should have down-weighted the degraded radar feed and relied on the 1550 nm LiDAR and thermal cameras.
+
+However, a firmware configuration error introduced during the October 12, 2025 software patch (Build 5.14.2) had inverted the radar signal-to-noise fault bit. Instead of marking the radar feed as degraded, NauticBrain-5 interpreted the 19 dB attenuation spike as a solid ghost obstacle 180 meters dead ahead. When the shore operator at Haugesund SCC attempted to issue a manual helm override via the primary Ku-band satellite link, the command packet was delayed by 3.8 seconds due to an automatic satellite beam handover, exceeding the vessel's 2.5-second dead-man watchdog threshold and triggering autonomous emergency anchoring.
+
+4. CORRECTIVE ACTIONS MANDATED
+Before MV Borealis-IV was cleared to resume commercial coastal operations on November 2, 2025, operator Skandia Autonav AS completed three mandatory remedial actions:
+1. Rolled back NauticBrain-5 firmware from Build 5.14.2 to verified Build 5.12.0 across all fleet vessels.
+2. Increased the radome de-icing heater duty cycle power from 400 W to 750 W whenever ambient air temperature drops below +2 °C.
+3. Extended the Shore Control Center override watchdog timeout from 2.5 seconds to 6.0 seconds when the secondary terrestrial 5G coastal link is active.
