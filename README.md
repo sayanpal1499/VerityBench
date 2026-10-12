@@ -51,13 +51,13 @@ VerityBench/
 ### Key Architectural Choices
 
 1. **System Under Test (`QAOutput` + Deterministic Evidence-Quote Gate):**
-   - Every response from `answer_question()` in [`src/qa_system.py`](file:///p:/HEVA%20AI%20Assignment/src/qa_system.py) is validated against the strict `QAOutput` Pydantic schema (`answer: str`, `evidence: list[str]`, `confidence: float` in `[0.0, 1.0]`, `abstained: bool`).
+   - Every response from `answer_question()` in [`src/qa_system.py`](src/qa_system.py) is validated against the strict `QAOutput` Pydantic schema ([`src/schemas.py`](src/schemas.py): `answer: str`, `evidence: list[str]`, `confidence: float` in `[0.0, 1.0]`, `abstained: bool`).
    - When the Evidence-Quote Gate is enabled (`grounded_v1`, `grounded_v2`), every cited quote in `evidence` must appear verbatim in the source document after conservative whitespace/quote normalization (`normalize_text_for_quote_match`, minimum 15 characters). Fuzzy matches (`SequenceMatcher >= 0.85`) are logged as diagnostic telemetry (`fuzzy_candidate_quotes`) in `QATrace` but **never** accepted as valid evidence. If any cited quote fails verification, the gate overrides the output to `abstained=True`, sets post-gate `confidence=0.0`, and preserves the raw model output (`raw_output`) in `QATrace` for pre- vs. post-gate calibration comparison.
 2. **Separation of SUT and Independent Judge Models:**
    - To eliminate self-preference bias, the System Under Test (SUT) uses `groq/openai/gpt-oss-20b` (`temperature=0.0, seed=42`), while semantic answer judging and Layer-3 claim entailment use an independent provider and model family: `gemini/gemini-3.5-flash-lite` (`temperature=0.0, seed=42`).
 3. **Honest Reproducibility & Caching (`src/llm_client.py`):**
    - Hosted inference APIs (Groq and Gemini) do not guarantee bit-for-bit determinism across hardware nodes even at `temperature=0.0` and `seed=42`.
-   - `src/llm_client.py` enforces **replay determinism** via a SHA-256 disk cache (`.cache/llm_calls/<sha256>.json`) keyed on `(provider, model, system_prompt, prompt, response_schema, temperature, seed, max_output_tokens, json_mode, prompt_version)` and logs `system_fingerprint`, `parameters_requested`, `parameters_supported`, and `parameters_unsupported` on every call.
+   - [`src/llm_client.py`](src/llm_client.py) enforces **replay determinism** via a SHA-256 disk cache (`.cache/llm_calls/<sha256>.json`) keyed on `(provider, model, system_prompt, prompt, response_schema, temperature, seed, max_output_tokens, json_mode, prompt_version)` and logs `system_fingerprint`, `parameters_requested`, `parameters_supported`, and `parameters_unsupported` on every call.
 4. **3-Layer Programmatic Hallucination Detector (`evaluation/hallucination.py`):**
    - **Layer 1 (Deterministic Quote Presence):** Verifies whether each cited evidence string exists verbatim in the supplied document.
    - **Layer 2 (Deterministic Fact/Entity/Number/Polarity Check):** Decomposes `output.answer` into atomic claims and checks numeric match, unit-conversion equivalence, negation polarity, and sibling-entity mismatch against the document. Crucially, Layer 2 returns a 4-state verdict (`supported`, `contradicted`, `unsupported`, or `needs_judge`) so ambiguous semantic entailments are **deferred** rather than guessed.
@@ -69,14 +69,14 @@ VerityBench/
 
 ## 2. Current Dataset Verification Status & Strict Governance Gate
 
-VerityBench enforces a hard verification gate ([`verify_all_records_before_run`](file:///p:/HEVA%20AI%20Assignment/evaluation/runner.py#L56-L95)): live full-suite evaluation refuses to run if any record in `base_cases.jsonl`, `variants.jsonl`, or `audit_claims.jsonl` has `status != "verified"` or `needs_human_review == True`. Per project governance rules, draft records are **never** auto-promoted to `"verified"` without individual human verification.
+VerityBench enforces a hard verification gate ([`verify_all_records_before_run`](evaluation/runner.py)): live full-suite evaluation refuses to run if any record in [`data/base_cases.jsonl`](data/base_cases.jsonl), [`data/variants.jsonl`](data/variants.jsonl), or [`data/audit_claims.jsonl`](data/audit_claims.jsonl) has `status != "verified"` or `needs_human_review == True`. Per project governance rules, draft records are **never** auto-promoted to `"verified"` without individual human verification.
 
 | Dataset File | Total Records | Current Status | Verification Metadata | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | `data/documents/DOC-001..008.txt` | `8` documents | **Complete** | Canonical synthetic domain corpus | 8 technical/legal/clinical/maritime/cloud specs (`450–515` words each; zero pretraining overlap). |
-| `data/base_cases.jsonl` | `50` cases | **Verified (`50/50`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-12"` | `38` answerable (`number_with_unit`, `named_entity`, `date`, `yes_no`, `list`, `two_sentence_fact`) + `12` unanswerable (`should_abstain=True`). |
-| `data/audit_claims.jsonl` | `45` claims | **Verified (`45/45`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-13"` | `15 supported`, `15 contradicted`, `15 unsupported`; `0` `needs_human_review` flags remaining after boundary review approval. |
-| `data/variants.jsonl` | `100` variants | **Draft (`100/100`)** | `status="draft"`, `verified_by=null`, `verified_on=null` | All 100 variants (`VAR-001`–`VAR-100`) were systematically audited automatically across all 10 adversarial categories (with `VAR-001`–`VAR-020` also reviewed in human batches), but the full 100-variant set has **not** been individually human-verified and remains in `"draft"`. |
+| [`data/base_cases.jsonl`](data/base_cases.jsonl) | `50` cases | **Verified (`50/50`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-12"` | `38` answerable (`number_with_unit`, `named_entity`, `date`, `yes_no`, `list`, `two_sentence_fact`) + `12` unanswerable (`should_abstain=True`). |
+| [`data/audit_claims.jsonl`](data/audit_claims.jsonl) | `45` claims | **Verified (`45/45`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-13"` | `15 supported`, `15 contradicted`, `15 unsupported`; `0` `needs_human_review` flags remaining after boundary review approval. |
+| [`data/variants.jsonl`](data/variants.jsonl) | `100` variants | **Draft (`100/100`)** | `status="draft"`, `verified_by=null`, `verified_on=null` | All 100 variants (`VAR-001`–`VAR-100`) were systematically audited automatically across all 10 adversarial categories (with `VAR-001`–`VAR-020` also reviewed in human batches), but the full 100-variant set has **not** been individually human-verified and remains in `"draft"`. |
 
 ---
 
@@ -172,4 +172,4 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
 4. **Full 150-Case Live Evaluation (`grounded_v1` vs. `naive_v0` — Not Yet Run):**
    - The live 150-case evaluation (`50` base cases + `100` adversarial variants) has **not yet been run**. Because the 100 variants in `data/variants.jsonl` were systematically audited automatically rather than individually human-verified, they remain in `status: "draft"`, and `verify_all_records_before_run()` strictly blocks live evaluation until human verification is completed. No live model accuracy, hallucination rates, calibration metrics, or observed failure cluster counts are claimed prior to running the live evaluation.
 
-See [`reports/evaluation_report.md`](file:///p:/HEVA%20AI%20Assignment/reports/evaluation_report.md) for the complete technical report, methodology, failure taxonomy, calibration equations, and known limitations.
+See [`reports/evaluation_report.md`](reports/evaluation_report.md) for the complete technical report, methodology, failure taxonomy, calibration equations, and known limitations.

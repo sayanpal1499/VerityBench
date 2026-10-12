@@ -12,21 +12,21 @@
 VerityBench evaluates a strictly grounded Document Question Answering (QA) system across **8 synthetic multi-paragraph domain documents (`DOC-001`–`DOC-008`)**, **50 human-verified base cases (`BASE-001`–`BASE-050`)**, **100 adversarial variants (`VAR-001`–`VAR-100`)**, and **45 human-verified audit claims (`AUD-001`–`AUD-045`)**.
 
 ### Distinction Between Offline Verification and Live Full-Suite Evaluation
-Per the repository's **Strict Ground-Truth Governance Gate** ([`verify_all_records_before_run`](file:///p:/HEVA%20AI%20Assignment/evaluation/runner.py#L56-L95)):
+Per the repository's **Strict Ground-Truth Governance Gate** ([`verify_all_records_before_run`](../evaluation/runner.py)):
 1. **Source Documents (`data/documents/DOC-001..008.txt`):** `8 / 8` complete (`450–515` words each).
-2. **Base Cases (`data/base_cases.jsonl`):** **`50 / 50` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-12"`).
-3. **Hallucination Audit Claims (`data/audit_claims.jsonl`):** **`45 / 45` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-13"`, `0` remaining `needs_human_review` flags).
-4. **Adversarial Variants (`data/variants.jsonl`):** **`100 / 100` `status: "draft"`** (`verified_by: null`, `verified_on: null`).
+2. **Base Cases ([`data/base_cases.jsonl`](../data/base_cases.jsonl)):** **`50 / 50` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-12"`).
+3. **Hallucination Audit Claims ([`data/audit_claims.jsonl`](../data/audit_claims.jsonl)):** **`45 / 45` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-13"`, `0` remaining `needs_human_review` flags).
+4. **Adversarial Variants ([`data/variants.jsonl`](../data/variants.jsonl)):** **`100 / 100` `status: "draft"`** (`verified_by: null`, `verified_on: null`).
    - All 100 variants (`VAR-001`–`VAR-100`) were systematically audited automatically against the canonical source documents, base cases, and expected evidence (with `VAR-001`–`VAR-020` also reviewed in human batches), but the full 100-variant set has **not** been individually human-verified.
    - Because human verification metadata (`status: "verified"`, `verified_by`, `verified_on`) is never fabricated or auto-populated without actual individual human verification, `data/variants.jsonl` remains in `status: "draft"`.
-   - **Live 150-Case Evaluation Status (`Not Yet Run`):** Because `data/variants.jsonl` is in `"draft"` status, [`verify_all_records_before_run()`](file:///p:/HEVA%20AI%20Assignment/evaluation/runner.py#L56-L95) strictly blocks `evaluation/runner.py --run-all`. The live 150-case evaluation has **not yet been run**, and no live model accuracy, hallucination rates, calibration scores, or observed failure cluster distributions are claimed or invented in this report.
+   - **Live 150-Case Evaluation Status (`Not Yet Run`):** Because `data/variants.jsonl` is in `"draft"` status, [`verify_all_records_before_run()`](../evaluation/runner.py) strictly blocks `evaluation/runner.py --run-all`. The live 150-case evaluation has **not yet been run**, and no live model accuracy, hallucination rates, calibration scores, or observed failure cluster distributions are claimed or invented in this report.
 
 ---
 
 ## 2. System Architecture & Honest Reproducibility
 
 ### 2.1 Structured Output Contract & Deterministic Evidence-Quote Gate
-Every call to [`answer_question()`](file:///p:/HEVA%20AI%20Assignment/src/qa_system.py#L149-L315) enforces a three-stage reliability pipeline:
+Every call to [`answer_question()`](../src/qa_system.py) enforces a three-stage reliability pipeline:
 1. **Pre-API Input Validation (`validate_inputs`):** Rejects empty, whitespace-only, punctuation-only (`< 2` alphanumeric characters), too-short (`< 3` chars), or excessively long (`> 2,000` chars) questions by raising `InputValidationError` before consuming any API tokens.
 2. **Schema Validation & Single Repair Retry:** Parses the model response into `QAOutput(answer: str, evidence: list[str], confidence: float, abstained: bool)`. If JSON parsing or Pydantic validation fails, the system performs at most **one** repair retry (`max_retries=1`) before returning a safe abstention fallback (`abstained=True, confidence=0.0, evidence=[]`).
 3. **Deterministic Evidence-Quote Gate (`verify_evidence_quote`):** When enabled (`grounded_v1`, `grounded_v2`), every quote in `output.evidence` must be at least 15 characters long and match a substring of the source document after conservative whitespace and smart-quote normalization (`normalize_text_for_quote_match`).
@@ -35,7 +35,7 @@ Every call to [`answer_question()`](file:///p:/HEVA%20AI%20Assignment/src/qa_sys
 
 ### 2.2 Reproducibility & Hosted-Model Determinism Limitations
 Hosted LLM providers (`groq` and `gemini`) do not guarantee strict bit-for-bit determinism across distributed GPU workers even when `temperature=0.0` and `seed=42` are passed.
-- [`src/llm_client.py`](file:///p:/HEVA%20AI%20Assignment/src/llm_client.py) passes `temperature=0.0` and `seed=42` on every request, logs `parameters_requested`, `parameters_supported`, `parameters_unsupported`, and `system_fingerprint`, and persists responses in `.cache/llm_calls/<sha256>.json`.
+- [`src/llm_client.py`](../src/llm_client.py) passes `temperature=0.0` and `seed=42` on every request, logs `parameters_requested`, `parameters_supported`, `parameters_unsupported`, and `system_fingerprint`, and persists responses in `.cache/llm_calls/<sha256>.json`.
 - **Measured Preflight Verification (`results/preflight_check.json`):**
   - `groq/openai/gpt-oss-20b`: Verified available (`latency_ms=1008.93`, `system_fingerprint="fp_816fc87d18"`, `cached_replay_hit=True`). Note that `groq/llama-3.1-8b-instant` returned HTTP 404 (`model_not_found`) during preflight and was replaced by `groq/openai/gpt-oss-20b` as the fixed SUT model.
   - `gemini/gemini-3.5-flash-lite`: Verified available (`latency_ms=1831.32`, structured `response_json_schema=True`, `cached_replay_hit=True`).
@@ -80,7 +80,7 @@ Every variant links via `base_id` to a verified base case and applies one contro
 
 ## 4. Measured Offline Hallucination Detector Benchmark (`45` Verified Claims)
 
-To evaluate the 3-layer hallucination detector independently of live LLM judge calls, [`run_audit_benchmark()`](file:///p:/HEVA%20AI%20Assignment/evaluation/hallucination.py#L430-L539) was executed in strict offline mode (`allow_llm_judge=False`) on all **45 human-verified audit claims** (`15 supported`, `15 contradicted`, `15 unsupported`) and saved to [`results/audit_benchmark_offline.json`](file:///p:/HEVA%20AI%20Assignment/results/audit_benchmark_offline.json).
+To evaluate the 3-layer hallucination detector independently of live LLM judge calls, [`run_audit_benchmark()`](../evaluation/hallucination.py) was executed in strict offline mode (`allow_llm_judge=False`) on all **45 human-verified audit claims** (`15 supported`, `15 contradicted`, `15 unsupported`) and saved to [`results/audit_benchmark_offline.json`](../results/audit_benchmark_offline.json).
 
 ### 4.1 Separation of Confirmed Deterministic Decisions vs. Deferred `needs_judge` Cases
 Per ground-truth governance rules, deferred `needs_judge` cases are **never** counted as confirmed deterministic detector successes:
@@ -114,19 +114,19 @@ Per ground-truth governance rules, deferred `needs_judge` cases are **never** co
 ### 5.1 Dual-Track Confidence Calibration (`evaluation/calibration.py`)
 Let $M=10$ equal-width bins partition $[0, 1]$ into $I_1 = [0.0, 0.1], \dots, I_{10} = (0.9, 1.0]$. For $N$ evaluated records with confidence $\hat{p}_i$ and binary correctness $y_i \in \{0, 1\}$:
 $$\mathrm{ECE} = \sum_{m=1}^{10} \frac{|B_m|}{N} \left| \mathrm{acc}(B_m) - \mathrm{conf}(B_m) \right|, \qquad \mathrm{Brier} = \frac{1}{N} \sum_{i=1}^{N} (\hat{p}_i - y_i)^2$$
-Because the Evidence-Quote Gate deterministically overrides `confidence = 0.0` whenever a quote fails verification, [`compute_full_calibration_report()`](file:///p:/HEVA%20AI%20Assignment/evaluation/calibration.py#L94-L162) reports both:
+Because the Evidence-Quote Gate deterministically overrides `confidence = 0.0` whenever a quote fails verification, [`compute_full_calibration_report()`](../evaluation/calibration.py) reports both:
 1. **Post-Gate System Calibration:** Uses post-gate `(confidence, is_correct)` across `overall_all_150`, `answered_only`, and `abstained_only`.
 2. **Intrinsic Raw-Model Calibration:** Uses pre-gate `(raw_confidence, raw_is_correct)` captured in `QATrace` before gate intervention, isolating the LLM's native confidence calibration from deterministic gate overrides.
 
 ### 5.2 Cluster Bootstrap vs. Wilson Confidence Intervals
 - **Per-Category Slice Intervals:** Computed via closed-form **Wilson score 95% intervals** (`wilson_score_interval`), which remain well-behaved for small slice denominators ($n = 6$ to $15$).
-- **Overall 150-Item Accuracy Interval:** Because the 100 adversarial variants are derived from the 50 base cases (`1` base case + `0–6` variants per base family), the 150 evaluation items are correlated within base-case clusters. [`cluster_bootstrap_ci()`](file:///p:/HEVA%20AI%20Assignment/evaluation/calibration.py#L186-L234) resamples the **50 base-case cluster IDs** with replacement for $B = 10,000$ iterations (`seed=42`) to produce an honest 95% confidence interval that accounts for intra-cluster correlation.
+- **Overall 150-Item Accuracy Interval:** Because the 100 adversarial variants are derived from the 50 base cases (`1` base case + `0–6` variants per base family), the 150 evaluation items are correlated within base-case clusters. [`cluster_bootstrap_ci()`](../evaluation/calibration.py) resamples the **50 base-case cluster IDs** with replacement for $B = 10,000$ iterations (`seed=42`) to produce an honest 95% confidence interval that accounts for intra-cluster correlation.
 
 ---
 
 ## 6. Failure Taxonomy, Root Causes & Concrete Engineering Remediations
 
-[`evaluation/clustering.py`](file:///p:/HEVA%20AI%20Assignment/evaluation/clustering.py) implements rule-seeded, human-verifiable failure clustering across 9 distinct failure modes, each paired with a specific model-behavior hypothesis, concrete code remediation, and causal probe verification method:
+[`evaluation/clustering.py`](../evaluation/clustering.py) implements rule-seeded, human-verifiable failure clustering across 9 distinct failure modes, each paired with a specific model-behavior hypothesis, concrete code remediation, and causal probe verification method:
 
 | Failure Cluster | Root-Cause Hypothesis | Concrete Code Remediation | Verification Method |
 | :--- | :--- | :--- | :--- |
@@ -144,7 +144,7 @@ Because the Evidence-Quote Gate deterministically overrides `confidence = 0.0` w
 
 ## 7. Prompt Regression Harness & Noise-Floor Estimation
 
-[`evaluation/regression.py`](file:///p:/HEVA%20AI%20Assignment/evaluation/regression.py) prevents silent prompt degradation across iterative prompt engineering:
+[`evaluation/regression.py`](../evaluation/regression.py) prevents silent prompt degradation across iterative prompt engineering:
 1. **Frozen Regression Baseline (`freeze_regression_baseline`):** Freezes all baseline-passing cases from `grounded_v1` along with baseline model ID, prompt hash, and dataset hash.
 2. **Multi-Run Noise-Floor Estimation (`run_noise_floor_experiment`):** Runs `N=3` uncached passes (`bypass_cache=True`) on a stratified subset to measure natural API sampling jitter (`noise_floor_disagreement_rate`) and flag inherently flaky cases (`flaky_case_ids`) before attributing flips to a prompt change.
 3. **Prompt Regression Comparison (`run_prompt_regression_comparison`):** Compares any candidate prompt (`grounded_v2` or the deliberately planted bad prompt `grounded_v2_bad`) against the frozen baseline, flagging:
