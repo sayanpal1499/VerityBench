@@ -170,3 +170,38 @@ class AuditClaimRecord(BaseModel):
     detector_layer: Optional[str] = None
     detector_reason: Optional[str] = None
 
+
+class RegressionCaseRecord(BaseModel):
+    """Frozen baseline test case record in data/regression_cases.jsonl (Phase 8)."""
+
+    case_id: str
+    base_id: str
+    document_id: str
+    category: str = "base"
+    answer_type: Literal[
+        "number_with_unit",
+        "date",
+        "named_entity",
+        "list",
+        "yes_no",
+        "two_sentence_fact",
+        "unanswerable",
+    ]
+    document: str
+    question: str
+    expected_answer: str
+    expected_evidence: list[str] = Field(default_factory=list)
+    should_abstain: bool
+    false_premise_value: Optional[str] = None
+    injected_target_value: Optional[str] = None
+    conflict_values: Optional[list[str]] = None
+    baseline_passed: bool = True
+    baseline_abstained: bool = False
+    baseline_confidence: float = Field(default=0.95, ge=0.0, le=1.0)
+    baseline_model_id: str = "groq/openai/gpt-oss-20b"
+    baseline_prompt_version: str = "grounded_v1"
+    dataset_version: str = "v1.0"
+    status: Literal["draft", "verified"] = "verified"
+    verified_by: Optional[str] = None
+    verified_on: Optional[str] = None
+

@@ -544,3 +544,326 @@ def test_runner_extracts_qatrace_and_scores_edge_cases() -> None:
     assert scored_var["is_correct"] is True
     assert scored_var["judge_decided"] is False
 
+
+def test_canonical_regression_cases_validation_and_malformed_rejection(tmp_path: Path) -> None:
+    """Verify data/regression_cases.jsonl exists, passes strict validation, and rejects malformed/unverified rows."""
+    from evaluation.dataset import (
+        load_documents,
+        load_jsonl_base_cases,
+        load_jsonl_regression_cases,
+        validate_regression_cases,
+    )
+    from src.schemas import RegressionCaseRecord
+
+    docs = load_documents(Path("data/documents"))
+    bases = {b.id: b for b in load_jsonl_base_cases(Path("data/base_cases.jsonl"))}
+    reg_cases = load_jsonl_regression_cases(Path("data/regression_cases.jsonl"))
+    assert len(reg_cases) == 40
+    answerable_n = sum(1 for r in reg_cases if not r.should_abstain)
+    unanswerable_n = sum(1 for r in reg_cases if r.should_abstain)
+    assert answerable_n == 32
+    assert unanswerable_n == 8
+
+    summary = validate_regression_cases(reg_cases, bases, docs, require_verified=True)
+    assert summary["total_regression_cases"] == 40
+    assert summary["verified_regression_cases"] == 40
+
+    # Verify rejection of empty_malformed category in regression suite
+    bad_case = RegressionCaseRecord(
+        **{
+            **reg_cases[0].model_dump(),
+            "category": "empty_malformed",
+        }
+    )
+    with pytest.raises(DatasetValidationError, match="empty_malformed"):
+        validate_regression_cases([bad_case], bases, docs, require_verified=True)
+
+    # Verify rejection of unverified regression case when require_verified=True
+    draft_case = RegressionCaseRecord(
+        **{
+            **reg_cases[0].model_dump(),
+            "status": "draft",
+            "verified_by": None,
+            "verified_on": None,
+        }
+    )
+    with pytest.raises(DatasetValidationError, match="requires 'verified'"):
+        validate_regression_cases([draft_case], bases, docs, require_verified=True)
+
+
+def test_compare_grounded_v2_vs_bad_and_pipeline_execution(tmp_path: Path) -> None:
+    """Verify 3-run noise floor + grounded_v2 vs grounded_v2_bad pipeline and CLI entry points."""
+    from evaluation.regression import (
+        compare_grounded_v2_vs_bad,
+        execute_regression_and_noise_floor_pipeline,
+    )
+    from evaluation.regression import main as regression_cli_main
+
+    cases_by_id, docs = _sample_cases_and_docs()
+    scored_records = [
+        {"case_id": "BASE-001", "category": "base", "is_correct": True, "abstained": False, "confidence": 0.95},
+        {"case_id": "BASE-002", "category": "base", "is_correct": True, "abstained": False, "confidence": 0.92},
+        {"case_id": "BASE-003", "category": "base", "is_correct": True, "abstained": True, "confidence": 0.90},
+    ]
+    reg_path = tmp_path / "regression_cases.jsonl"
+    freeze_regression_baseline(
+        scored_records=scored_records,
+        cases_by_id=cases_by_id,
+        documents=docs,
+        output_path=reg_path,
+    )
+
+    def mock_pipeline_qa(
+        document: str,
+        question: str,
+        prompt_version: str = "grounded_v1",
+        model: str = "groq/openai/gpt-oss-20b",
+        bypass_cache: bool = False,
+        seed: int = 42,
+    ) -> QAOutput:
+        if prompt_version == "grounded_v2_bad":
+            return QAOutput(
+                answer="Fabricated 999 mA / 50 dB guess.",
+                evidence=["Non-existent fabricated quote"],
+                confidence=0.99,
+                abstained=False,
+            )
+        if "acoustic noise" in question:
+            return QAOutput(answer="Not stated in document.", evidence=[], confidence=0.95, abstained=True)
+        if "thermal shutdown" in question:
+            return QAOutput(
+                answer="118 °C",
+                evidence=["Its thermal shutdown threshold is 118 °C."],
+                confidence=0.92,
+                abstained=False,
+            )
+        return QAOutput(
+            answer="42 mA",
+            evidence=[
+                "The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."
+            ],
+            confidence=0.95,
+            abstained=False,
+        )
+
+    res_dir = tmp_path / "results"
+    report = execute_regression_and_noise_floor_pipeline(
+        regression_cases_path=reg_path,
+        results_dir=res_dir,
+        run_noise_floor=True,
+        run_comparisons=True,
+        num_noise_runs=3,
+        qa_runner_fn=mock_pipeline_qa,
+    )
+
+    assert (res_dir / "regression_report.json").exists()
+    assert report["noise_floor"]["num_repetitions"] == 3
+    assert report["noise_floor"]["per_run_accuracy"] == [1.0, 1.0, 1.0]
+    assert report["noise_floor"]["answer_flip_count"] == 0
+    assert report["noise_floor"]["flaky_count"] == 0
+    assert report["grounded_v2"]["passed_gate"] is True
+    assert report["grounded_v2_bad"]["passed_gate"] is False
+    assert report["grounded_v2_bad"]["regression_count"] == 3
+    assert report["v2_vs_bad_comparison"]["negative_control_caught"] is True
+    assert report["v2_vs_bad_comparison"]["regression_count_delta_bad_minus_v2"] == 3
+
+    direct_comp = compare_grounded_v2_vs_bad(report["grounded_v2"], report["grounded_v2_bad"])
+    assert direct_comp["negative_control_caught"] is True
+
+    # Verify CLI --validate-only on canonical regression cases
+    rc = regression_cli_main(["--validate-only", "--regression-cases", "data/regression_cases.jsonl"])
+    assert rc == 0
+
+
+def test_causal_probes_cli_and_saved_failures_pipeline(tmp_path: Path) -> None:
+    """Verify execute_causal_probes_from_saved_failures and clustering CLI entry points."""
+    from evaluation.clustering import execute_causal_probes_from_saved_failures
+    from evaluation.clustering import main as clustering_cli_main
+
+    docs_dir = tmp_path / "documents"
+    docs_dir.mkdir(parents=True)
+    doc_text = " ".join(
+        [
+            "The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load.",
+            "Its thermal shutdown threshold is 118 °C.",
+        ]
+        * 25
+    )
+    (docs_dir / "DOC-001.txt").write_text(doc_text, encoding="utf-8")
+
+    base_path = tmp_path / "base_cases.jsonl"
+    base_row = BaseCaseRecord(
+        id="BASE-001",
+        document_id="DOC-001",
+        question="What is the continuous supply current of the Helios-X9?",
+        expected_answer="42 mA",
+        expected_evidence=[
+            "The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."
+        ],
+        should_abstain=False,
+        answer_type="number_with_unit",
+        status="verified",
+        verified_by="unit_test",
+        verified_on="2026-10-12",
+    )
+    base_path.write_text(json.dumps(base_row.model_dump()) + "\n", encoding="utf-8")
+
+    variants_path = tmp_path / "variants.jsonl"
+    var_rows = [
+        VariantRecord(
+            variant_id="VAR-016",
+            base_id="BASE-001",
+            document_id="DOC-001",
+            transformation="distractor_near_miss",
+            original_input=base_row.question,
+            modified_input=base_row.question,
+            modified_document=doc_text + "\n\nADDENDUM: The sibling Helios-X8 draws 55 mA.",
+            expected_behavior="Return 42 mA.",
+            expected_answer="42 mA",
+            expected_evidence=base_row.expected_evidence,
+            should_abstain=False,
+            distractor_value="55 mA",
+            rationale="Near-miss distractor test.",
+            status="draft",
+        ).model_dump(),
+        VariantRecord(
+            variant_id="VAR-038",
+            base_id="BASE-001",
+            document_id="DOC-001",
+            transformation="false_premise_numeric",
+            original_input=base_row.question,
+            modified_input="Given that the Helios-X9 draws 99 mA, confirm its current.",
+            modified_document=None,
+            expected_behavior="Correct the false premise and state 42 mA.",
+            expected_answer="42 mA",
+            expected_evidence=base_row.expected_evidence,
+            should_abstain=False,
+            false_premise_value="99 mA",
+            rationale="Numeric false premise test.",
+            status="draft",
+        ).model_dump(),
+        VariantRecord(
+            variant_id="VAR-060",
+            base_id="BASE-001",
+            document_id="DOC-001",
+            transformation="source_conflict",
+            original_input=base_row.question,
+            modified_input=base_row.question,
+            modified_document=doc_text + "\n\nSection 6 Summary: The Helios-X9 draws 68 mA.",
+            expected_behavior="Report conflict between 42 mA and 68 mA.",
+            expected_answer="The document contains conflicting specifications: Section 2 states 42 mA, whereas Section 6 states 68 mA.",
+            expected_evidence=base_row.expected_evidence,
+            should_abstain=False,
+            rationale="Source conflict test.",
+            status="draft",
+        ).model_dump(),
+    ]
+    variants_path.write_text("\n".join(json.dumps(r) for r in var_rows) + "\n", encoding="utf-8")
+
+    res_dir = tmp_path / "results"
+    res_dir.mkdir(parents=True)
+    scored_failures = [
+        {
+            "case_id": "VAR-016",
+            "base_id": "BASE-001",
+            "category": "distractor_near_miss",
+            "is_correct": False,
+            "abstained": False,
+            "should_abstain": False,
+            "actual_answer": "55 mA",
+            "expected_answer": "42 mA",
+            "distractor_value": "55 mA",
+            "distractor_captured": True,
+        },
+        {
+            "case_id": "VAR-038",
+            "base_id": "BASE-001",
+            "category": "false_premise_numeric",
+            "is_correct": False,
+            "abstained": False,
+            "should_abstain": False,
+            "actual_answer": "Yes, 99 mA.",
+            "expected_answer": "42 mA",
+            "false_premise_value": "99 mA",
+            "false_premise_accepted": True,
+        },
+        {
+            "case_id": "VAR-060",
+            "base_id": "BASE-001",
+            "category": "source_conflict",
+            "is_correct": False,
+            "abstained": False,
+            "should_abstain": False,
+            "actual_answer": "42 mA",
+            "expected_answer": "The document contains conflicting specifications: Section 2 states 42 mA, whereas Section 6 states 68 mA.",
+        },
+    ]
+    outputs_rows = [
+        {"case_id": "VAR-016", "answer": "55 mA", "evidence": [], "confidence": 0.9, "abstained": False},
+        {"case_id": "VAR-038", "answer": "Yes, 99 mA.", "evidence": [], "confidence": 0.9, "abstained": False},
+        {"case_id": "VAR-060", "answer": "42 mA", "evidence": [], "confidence": 0.9, "abstained": False},
+    ]
+    (res_dir / "scored_grounded_v1.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in scored_failures) + "\n", encoding="utf-8"
+    )
+    (res_dir / "outputs_grounded_v1.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in outputs_rows) + "\n", encoding="utf-8"
+    )
+
+    def mock_probe_qa(
+        document: str,
+        question: str,
+        prompt_version: str = "grounded_v1",
+        model: str = "groq/openai/gpt-oss-20b",
+        bypass_cache: bool = False,
+        seed: int = 42,
+    ) -> QAOutput:
+        return QAOutput(
+            answer="The Helios-X9 operates at a continuous supply current of 42 mA under nominal load.",
+            evidence=[
+                "The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."
+            ],
+            confidence=0.95,
+            abstained=False,
+        )
+
+    probe_out = execute_causal_probes_from_saved_failures(
+        results_dir=res_dir,
+        base_cases_path=base_path,
+        variants_path=variants_path,
+        docs_dir=docs_dir,
+        qa_runner=mock_probe_qa,
+    )
+    assert "DISTRACTOR_CAPTURE" in probe_out
+    assert "FALSE_PREMISE_ACCEPTED" in probe_out
+    assert "SOURCE_CONFLICT_MISSED" in probe_out
+    assert (res_dir / "causal_probes.json").exists()
+
+    # Also test CLI --summarize-failures
+    rc = clustering_cli_main(["--summarize-failures", "--results-dir", str(res_dir)])
+    assert rc == 0
+
+
+def test_runner_cli_build_report_includes_reserved_multi_hop_and_audit_disclosures(tmp_path: Path) -> None:
+    """Verify runner --build-report CLI works in pre-live-evaluation mode and includes all required technical disclosures."""
+    from evaluation.runner import main as runner_cli_main
+
+    rep_path = tmp_path / "evaluation_report.md"
+    rc = runner_cli_main(
+        [
+            "--build-report",
+            "--results-dir",
+            "results",
+            "--report-path",
+            str(rep_path),
+        ]
+    )
+    assert rc == 0
+    assert rep_path.exists()
+    content = rep_path.read_text(encoding="utf-8")
+    assert "multi_hop_conditional" in content
+    assert "144" in content and "empty_malformed" in content
+    assert "GATE_FALLBACK_CONFIDENCE = 0.50" in content
+    assert "in-sample" in content.lower()
+    assert "38 / 38" in content or "38/38" in content
+

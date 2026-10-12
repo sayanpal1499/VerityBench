@@ -1,12 +1,16 @@
-# VerityBench — Compact Human-Review Checklist for Adversarial Variants (`VAR-001`–`VAR-100`)
+# VerityBench — Consolidated Human-Review Checklist for Adversarial Variants (`VAR-001`–`VAR-100`)
 
-- **Canonical File:** `data/variants.jsonl` (`100` variants, all currently `status: "draft"`, `verified_by: null`, `verified_on: null`)
+- **Canonical File:** `data/variants.jsonl` (`100` variants across `10` active transformation categories; all `100/100` currently `status: "draft"`, `verified_by: null`, `verified_on: null`)
 - **Companion CSV:** `data/variants_review.csv`
 - **Generator Module:** `evaluation/adversarial.py` (`100%` synchronized with `data/variants.jsonl` and `data/variants_review.csv`)
-- **Review & Audit Status:**
-  - **Batch 1 (`VAR-001`–`VAR-010`):** Explicitly human-reviewed and approved (`2026-10-13`), with targeted updates applied to `VAR-001`, `VAR-003`, `VAR-005` (`notes`), `VAR-006`, and `VAR-010`. Kept in `status: "draft"` until full promotion is authorized.
-  - **Batch 2 (`VAR-011`–`VAR-020`):** Explicitly human-reviewed and approved (`2026-10-13`), with targeted updates applied to `VAR-011`, `VAR-012` (`notes`), `VAR-013` (`notes`), and `VAR-017`–`VAR-020` (`modified_document` addenda). Kept in `status: "draft"` until full promotion is authorized.
-  - **Batches 3–10 (`VAR-021`–`VAR-100`):** Systematically audited against canonical source documents, base cases, and expected evidence (`2026-10-13`). Unambiguous corrections applied to `VAR-021`–`VAR-027` (removed answer-repeating second sentences from near-miss addenda), `VAR-053` (fixed missing space typo in `false_premise_value`), and `VAR-060`–`VAR-069` (refined appended `source_conflict` clauses into co-equal summary statements without legal supersession wording). Kept in `status: "draft"` (`verified_by: null`, `verified_on: null`) pending final human promotion sign-off.
+- **Exact Prerequisite Blocking Live Evaluation (`verify_all_records_before_run` in `evaluation/runner.py`):**
+  - Live evaluation (`python -m evaluation.runner --run-all`) enforces `validate_variants(variants, base_map, docs, require_verified=True)`.
+  - Every record in `data/variants.jsonl` (`VAR-001`–`VAR-100`) must have `status == "verified"`, a non-empty `verified_by` identifier, and a non-empty `verified_on` ISO date (`YYYY-MM-DD`).
+  - Per project governance, automated audits never fabricate human sign-off metadata; all `100` records remain `status: "draft"` until a human reviewer completes sign-off of the batches below.
+- **Consolidated Review & Audit Status (`VAR-001`–`VAR-100`):**
+  - **Batch 1 (`VAR-001`–`VAR-010`, `10` variants):** Explicitly human-reviewed and approved (`2026-10-13`), with targeted updates applied to `VAR-001`, `VAR-003`, `VAR-005` (`notes`), `VAR-006`, and `VAR-010`. Kept in `status: "draft"` until full 100-variant promotion is authorized.
+  - **Batch 2 (`VAR-011`–`VAR-020`, `10` variants):** Explicitly human-reviewed and approved (`2026-10-13`), with targeted updates applied to `VAR-011`, `VAR-012` (`notes`), `VAR-013` (`notes`), and `VAR-017`–`VAR-020` (`modified_document` addenda). Kept in `status: "draft"` until full 100-variant promotion is authorized.
+  - **Batches 3–10 (`VAR-021`–`VAR-100`, `80` remaining variants):** Systematically audited in one pass against canonical source documents, base cases, and expected evidence (`2026-10-13`). Unambiguous corrections applied to `VAR-021`–`VAR-027` (removed answer-repeating second sentences from near-miss addenda), `VAR-053` (fixed missing space typo in `false_premise_value`), and `VAR-060`–`VAR-069` (refined appended `source_conflict` clauses into co-equal summary statements without legal supersession wording). Note that `VAR-095`–`VAR-100` (`empty_malformed`) test pre-API `InputValidationError` rejection (`144` LLM-eligible cases + `6` pre-API deterministic rejections = `150` nominal cases). All `80` records in Batches 3–10 are consolidated below for human sign-off and remain in `status: "draft"` (`verified_by: null`, `verified_on: null`).
 
 ## Batch 1: `VAR-001`–`VAR-010` (`paraphrase_hard`) — ✅ Human Review Approved (`2026-10-13`, `draft` preserved)
 

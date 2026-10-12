@@ -10,17 +10,24 @@ from typing import Any, Optional
 from pydantic import ValidationError
 
 from src.qa_system import normalize_text_for_quote_match
-from src.schemas import AuditClaimRecord, BaseCaseRecord, VariantRecord
+from src.schemas import (
+    AuditClaimRecord,
+    BaseCaseRecord,
+    RegressionCaseRecord,
+    VariantRecord,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DOCS_DIR = PROJECT_ROOT / "data" / "documents"
 DEFAULT_BASE_CASES_PATH = PROJECT_ROOT / "data" / "base_cases.jsonl"
 DEFAULT_VARIANTS_PATH = PROJECT_ROOT / "data" / "variants.jsonl"
 DEFAULT_AUDIT_CLAIMS_PATH = PROJECT_ROOT / "data" / "audit_claims.jsonl"
+DEFAULT_REGRESSION_CASES_PATH = PROJECT_ROOT / "data" / "regression_cases.jsonl"
 
 MIN_DOC_WORDS = 300
 MAX_DOC_WORDS = 1500
 MIN_AUDIT_CLAIMS = 40
+MIN_REGRESSION_CASES = 20
 
 STOPWORDS = {
     "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
@@ -480,6 +487,167 @@ def validate_audit_claims(
     }
 
 
+def load_jsonl_regression_cases(
+    path: Path = DEFAULT_REGRESSION_CASES_PATH,
+) -> list[RegressionCaseRecord]:
+    """Parse regression_cases.jsonl into a list of RegressionCaseRecord objects."""
+    if not path.exists():
+        raise DatasetValidationError(f"Regression cases file not found: {path}")
+
+    records: list[RegressionCaseRecord] = []
+    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            records.append(RegressionCaseRecord.model_validate(data))
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise DatasetValidationError(
+                f"Invalid regression case record at {path}:{line_no}: {exc}"
+            ) from exc
+    return records
+
+
+def validate_regression_cases(
+    records: list[RegressionCaseRecord | dict[str, Any]],
+    base_cases_by_id: dict[str, BaseCaseRecord],
+    documents: dict[str, str],
+    variants_by_id: Optional[dict[str, VariantRecord]] = None,
+    require_verified: bool = True,
+    min_cases: int = MIN_REGRESSION_CASES,
+) -> dict[str, Any]:
+    """Validate frozen regression baseline cases in data/regression_cases.jsonl."""
+    errors: list[str] = []
+    if len(records) < min_cases:
+        errors.append(
+            f"Expected at least {min_cases} regression cases, found {len(records)}."
+        )
+
+    seen_ids: set[str] = set()
+    verified_count = 0
+    draft_count = 0
+    by_category: dict[str, int] = {}
+    answerable_count = 0
+    unanswerable_count = 0
+
+    for item in records:
+        rec = (
+            item
+            if isinstance(item, RegressionCaseRecord)
+            else RegressionCaseRecord.model_validate(item)
+        )
+        if rec.case_id in seen_ids:
+            errors.append(f"Duplicate regression case_id: '{rec.case_id}'.")
+        seen_ids.add(rec.case_id)
+
+        if rec.category == "empty_malformed":
+            errors.append(
+                f"Regression case {rec.case_id}: 'empty_malformed' pre-API cases cannot be included in LLM regression cases."
+            )
+
+        by_category[rec.category] = by_category.get(rec.category, 0) + 1
+        if rec.should_abstain:
+            unanswerable_count += 1
+        else:
+            answerable_count += 1
+
+        if rec.document_id not in documents:
+            errors.append(
+                f"Regression case {rec.case_id}: document_id '{rec.document_id}' not found in documents."
+            )
+            continue
+
+        if rec.category == "base":
+            src_base = base_cases_by_id.get(rec.case_id)
+            if src_base is None:
+                errors.append(
+                    f"Regression case {rec.case_id}: not found in canonical base_cases."
+                )
+            else:
+                if rec.expected_answer != src_base.expected_answer:
+                    errors.append(
+                        f"Regression case {rec.case_id}: expected_answer '{rec.expected_answer}' "
+                        f"does not match canonical base case '{src_base.expected_answer}'."
+                    )
+                if rec.question != src_base.question:
+                    errors.append(
+                        f"Regression case {rec.case_id}: question does not match canonical base case."
+                    )
+                if rec.should_abstain != src_base.should_abstain:
+                    errors.append(
+                        f"Regression case {rec.case_id}: should_abstain does not match canonical base case."
+                    )
+                if rec.document != documents[rec.document_id]:
+                    errors.append(
+                        f"Regression case {rec.case_id}: embedded document text does not match '{rec.document_id}'."
+                    )
+                if src_base.status == "verified" and rec.status == "verified":
+                    verified_count += 1
+                else:
+                    draft_count += 1
+                    if require_verified:
+                        errors.append(
+                            f"Regression case {rec.case_id}: canonical status is '{src_base.status}' / record status is '{rec.status}'; requires 'verified'."
+                        )
+        else:
+            src_var = variants_by_id.get(rec.case_id) if variants_by_id else None
+            if variants_by_id is not None and src_var is None:
+                errors.append(
+                    f"Regression case {rec.case_id}: variant not found in canonical variants."
+                )
+            elif src_var is not None:
+                if rec.expected_answer != src_var.expected_answer:
+                    errors.append(
+                        f"Regression case {rec.case_id}: expected_answer does not match canonical variant."
+                    )
+                if src_var.status == "verified" and rec.status == "verified":
+                    verified_count += 1
+                else:
+                    draft_count += 1
+                    if require_verified:
+                        errors.append(
+                            f"Regression case {rec.case_id}: canonical variant status is '{src_var.status}'; requires 'verified'."
+                        )
+            else:
+                if rec.status == "verified":
+                    verified_count += 1
+                else:
+                    draft_count += 1
+                    if require_verified:
+                        errors.append(
+                            f"Regression case {rec.case_id}: status is '{rec.status}'; requires 'verified'."
+                        )
+
+        if not rec.should_abstain:
+            if not rec.expected_evidence:
+                errors.append(
+                    f"Regression case {rec.case_id}: answerable case must have non-empty expected_evidence."
+                )
+            norm_doc = normalize_text_for_quote_match(rec.document)
+            for ev in rec.expected_evidence:
+                norm_ev = normalize_text_for_quote_match(ev)
+                if ev not in rec.document and norm_ev not in norm_doc:
+                    errors.append(
+                        f"Regression case {rec.case_id}: expected_evidence not found verbatim in document."
+                    )
+
+    if errors:
+        bullet_list = "\n  - ".join(errors[:25])
+        raise DatasetValidationError(
+            f"Regression cases validation failed with {len(errors)} error(s):\n  - {bullet_list}"
+        )
+
+    return {
+        "total_regression_cases": len(records),
+        "verified_regression_cases": verified_count,
+        "draft_regression_cases": draft_count,
+        "answerable_cases": answerable_count,
+        "unanswerable_cases": unanswerable_count,
+        "by_category": by_category,
+    }
+
+
 def compute_dataset_hash(
     base_path: Path = DEFAULT_BASE_CASES_PATH,
     variants_path: Optional[Path] = None,
@@ -496,7 +664,7 @@ def compute_dataset_hash(
 def main() -> None:
     """CLI validator for inspecting dataset integrity and verification status."""
     parser = argparse.ArgumentParser(
-        description="Validate documents, base cases, variants, and audit claims."
+        description="Validate documents, base cases, variants, audit claims, and regression cases."
     )
     parser.add_argument(
         "--allow-draft",
@@ -512,6 +680,11 @@ def main() -> None:
         "--check-audit-claims",
         action="store_true",
         help="Also validate data/audit_claims.jsonl if present.",
+    )
+    parser.add_argument(
+        "--check-regression-cases",
+        action="store_true",
+        help="Also validate data/regression_cases.jsonl if present.",
     )
     args = parser.parse_args()
 
@@ -544,6 +717,21 @@ def main() -> None:
             claims=claims,
             base_cases_by_id=base_map,
             documents=docs,
+            require_verified=not args.allow_draft,
+        )
+
+    if args.check_regression_cases and DEFAULT_REGRESSION_CASES_PATH.exists():
+        reg_cases = load_jsonl_regression_cases()
+        var_map = (
+            {v.variant_id: v for v in load_jsonl_variants()}
+            if DEFAULT_VARIANTS_PATH.exists()
+            else None
+        )
+        output["regression_cases_summary"] = validate_regression_cases(
+            records=reg_cases,
+            base_cases_by_id=base_map,
+            documents=docs,
+            variants_by_id=var_map,
             require_verified=not args.allow_draft,
         )
 

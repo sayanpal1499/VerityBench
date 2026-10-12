@@ -1,6 +1,8 @@
 """Phase 7 Failure Mode Clustering, Human Review Export/Import, and Causal Probes (evaluation/clustering.py)."""
 
+import argparse
 import csv
+import json
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -8,6 +10,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from evaluation.dataset import (
+    DEFAULT_BASE_CASES_PATH,
+    DEFAULT_DOCS_DIR,
+    DEFAULT_VARIANTS_PATH,
+    load_documents,
+    load_jsonl_base_cases,
+    load_jsonl_variants,
+)
 from src.qa_system import answer_question
 from src.schemas import BaseCaseRecord, QAOutput, VariantRecord
 
@@ -539,3 +549,142 @@ def plot_failure_distribution(
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
+
+
+def execute_causal_probes_from_saved_failures(
+    results_dir: Path | str = Path("results"),
+    base_cases_path: Path | str = DEFAULT_BASE_CASES_PATH,
+    variants_path: Path | str = DEFAULT_VARIANTS_PATH,
+    docs_dir: Path | str = DEFAULT_DOCS_DIR,
+    qa_runner: Callable[..., QAOutput] = answer_question,
+    prompt_version: str = "grounded_v1",
+) -> dict[str, Any]:
+    """Load saved failure records from `results/` and execute causal probes, saving `results/causal_probes.json`."""
+    res_dir = Path(results_dir)
+    res_dir.mkdir(parents=True, exist_ok=True)
+    review_csv = res_dir / "failure_review.csv"
+
+    if review_csv.exists():
+        failure_records = load_failure_review_csv(review_csv)
+    else:
+        scored_file = res_dir / "scored_grounded_v1.jsonl"
+        outputs_file = res_dir / "outputs_grounded_v1.jsonl"
+        claims_file = res_dir / "claims_grounded_v1.jsonl"
+        if not scored_file.exists() or not outputs_file.exists():
+            raise FileNotFoundError(
+                f"Cannot run causal probes: neither '{review_csv}' nor '{scored_file}' exists."
+            )
+        scored_records = [
+            json.loads(line)
+            for line in scored_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        outputs_by_id = {
+            str(r["case_id"]): r
+            for r in (
+                json.loads(line)
+                for line in outputs_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+        }
+        claims_by_id = None
+        if claims_file.exists():
+            claims_by_id = {
+                str(r["case_id"]): r
+                for r in (
+                    json.loads(line)
+                    for line in claims_file.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                )
+            }
+        failure_records = build_failure_records_for_review(
+            scored_records=scored_records,
+            outputs_by_id=outputs_by_id,
+            hallucinations_by_id=claims_by_id,
+        )
+        export_failure_review_csv(failure_records, review_csv)
+
+    docs = load_documents(Path(docs_dir))
+    base_cases = load_jsonl_base_cases(Path(base_cases_path))
+    variants = load_jsonl_variants(Path(variants_path))
+    base_map = {b.id: b for b in base_cases}
+    var_map = {v.variant_id: v for v in variants}
+
+    probe_results = run_causal_probes_for_clusters(
+        failure_records=failure_records,
+        base_cases_by_id=base_map,
+        variants_by_id=var_map,
+        documents=docs,
+        qa_runner=qa_runner,
+        prompt_version=prompt_version,
+    )
+    out_path = res_dir / "causal_probes.json"
+    out_path.write_text(
+        json.dumps(probe_results, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return probe_results
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for Phase 7 failure clustering summary and causal probes."""
+    parser = argparse.ArgumentParser(
+        description="VerityBench Phase 7 Failure Mode Clustering & Causal Probes Runner"
+    )
+    parser.add_argument(
+        "--summarize-failures",
+        action="store_true",
+        help="Summarize failure clusters from results/failure_review.csv.",
+    )
+    parser.add_argument(
+        "--run-probes",
+        action="store_true",
+        help="Run causal probes for observed failure clusters and write results/causal_probes.json.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=Path("results"),
+        help="Directory containing failure_review.csv and outputs.",
+    )
+    parser.add_argument(
+        "--base-cases",
+        type=Path,
+        default=DEFAULT_BASE_CASES_PATH,
+        help="Path to base_cases.jsonl",
+    )
+    parser.add_argument(
+        "--variants",
+        type=Path,
+        default=DEFAULT_VARIANTS_PATH,
+        help="Path to variants.jsonl",
+    )
+    parser.add_argument(
+        "--docs-dir",
+        type=Path,
+        default=DEFAULT_DOCS_DIR,
+        help="Path to source documents directory",
+    )
+    args = parser.parse_args(argv)
+
+    if args.summarize_failures:
+        records = load_failure_review_csv(args.results_dir / "failure_review.csv")
+        summary = summarize_failure_clusters(records)
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        return 0
+
+    if args.run_probes:
+        probes = execute_causal_probes_from_saved_failures(
+            results_dir=args.results_dir,
+            base_cases_path=args.base_cases,
+            variants_path=args.variants,
+            docs_dir=args.docs_dir,
+        )
+        print(json.dumps(probes, indent=2, ensure_ascii=False))
+        return 0
+
+    parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
