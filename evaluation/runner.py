@@ -471,16 +471,16 @@ Per the repository's **Strict Ground-Truth Governance Gate** ([`verify_all_recor
 2. **Base Cases ([`data/base_cases.jsonl`](../data/base_cases.jsonl)):** **`50 / 50` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-12"`).
 3. **Regression Cases ([`data/regression_cases.jsonl`](../data/regression_cases.jsonl)):** **`40 / 40` `status: "inherited_from_base_case"`** (`verification_source: "inherited_from_base_case"`, `baseline_source: "canonical_base_case_seed"`, `verified_by: null`, `verified_on: null`, with `source_base_verified_by: "sayanpal1499"` and `source_base_verified_on: "2026-10-12"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`). These 40 records were **not** independently human-reviewed a second time as a separate dataset and have **not** yet been frozen from a live `grounded_v1` evaluation run.
 4. **Hallucination Audit Claims ([`data/audit_claims.jsonl`](../data/audit_claims.jsonl)):** **`45 / 45` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-13"`, `0` remaining `needs_human_review` flags).
-5. **Adversarial Variants ([`data/variants.jsonl`](../data/variants.jsonl)):** **`100 / 100` `status: "draft"`** (`verified_by: null`, `verified_on: null`).
-   - All 100 variants (`VAR-001`–`VAR-100`) were systematically audited automatically against the canonical source documents, base cases, and expected evidence (`VAR-001`–`VAR-020` were also reviewed in human batches 1–2; `VAR-021`–`VAR-100` are consolidated in [`data/variants_final_review_checklist.md`](../data/variants_final_review_checklist.md)), but the full 100-variant set has **not** been individually human-verified.
-   - Because human verification metadata (`status: "verified"`, `verified_by`, `verified_on`) is never fabricated or auto-populated without actual individual human verification, `data/variants.jsonl` remains in `status: "draft"`.
-6. **Four-Way Separation of What Is Measured, Simulated, Recorded in Preflight, and Unavailable:**
+5. **Adversarial Variants ([`data/variants.jsonl`](../data/variants.jsonl)):** **`20 / 100` `status: "verified"`**, **`80 / 100` `status: "draft"`** (`verified_by: null`, `verified_on: null`).
+   - Batches 1–2 (`VAR-001`–`VAR-020`) were human-reviewed and approved (`status: "verified"` by sayanpal1499); Batches 3–10 (`VAR-021`–`VAR-100`) were systematically audited in one pass and consolidated in [`data/variants_final_review_checklist.md`](../data/variants_final_review_checklist.md), but remain in `status: "draft"` pending final human sign-off.
+   - Because human verification metadata (`status: "verified"`, `verified_by`, `verified_on`) is never fabricated or auto-populated without actual individual human verification, `data/variants.jsonl` preserves draft status for all 80 unapproved variants.
+6. **Separation of Offline Benchmarks, Historical Live Run, and Current Dataset Governance:**
    - **Measured Offline Benchmark (`results/audit_benchmark_offline.json`):** Layer-1/Layer-2 deterministic hallucination detector evaluated on all 45 verified audit claims (`allow_llm_judge=False`). Note that these 45 claims constitute a **non-independent, in-sample rule-development audit set**, not a held-out blind benchmark.
    - **Synthetic / Fake-LLM Unit & Integration Tests (`pytest` Suite):** All unit and integration tests for `execute_verified_evaluation`, `run_noise_floor_experiment`, `run_prompt_regression_comparison` (`grounded_v2` vs. `grounded_v2_bad`), and `run_causal_probes_for_clusters` execute against deterministic fake-LLM mocks (`0` network calls during `pytest`) to verify code paths without consuming API credits. Mocked dry-run outputs are **never** reported as real model results.
    - **Recorded Live Preflight API Results ([`results/preflight_check.json`](../results/preflight_check.json) & `.cache/llm_responses/`):** Live external API requests **did occur** on `2026-10-12` during `RUN-00-PREFLIGHT`:
      - The initial Groq model check for **`groq/llama-3.1-8b-instant` made a live API request and failed the model-availability check** with `Groq HTTP 404` (`code: "model_not_found"`, `"The model llama-3.1-8b-instant does not exist or you do not have access to it"`, `available: false`).
      - Subsequent live Groq preflight requests tested `groq/openai/gpt-oss-20b` (`available: true`, `latency_ms=1008.93`, `system_fingerprint="fp_816fc87d18"`, `cached_replay_hit=True`) and `groq/qwen/qwen3.8-27b` (`available: true`, `latency_ms=672.06`, `system_fingerprint="fp_424cb89518"`), and a live Gemini preflight request tested `gemini/gemini-3.5-flash-lite` (`available: true`, `latency_ms=1831.32`, `response_json_schema=True`, `cached_replay_hit=True`), plus 5 manual smoke-test scenarios (`EX-1`–`EX-5` on `groq/openai/gpt-oss-20b`, storing 15 cached responses in `.cache/llm_responses/`).
-   - **Unavailable / Not Yet Run (`Full Live 150-Nominal / 144-LLM-Eligible Evaluation`):** While live preflight API calls were executed in `RUN-00-PREFLIGHT`, the complete 150-case evaluation (`50` base + `100` variants) has **not** been run. Because `data/variants.jsonl` remains in `status: "draft"`, [`verify_all_records_before_run()`](../evaluation/runner.py) blocks `python -m evaluation.runner --run-all`. No live benchmark accuracy, hallucination rates, calibration scores, or observed failure cluster counts are claimed or invented in this report.
+   - **Historical Live Benchmark Run vs. Current Dataset Governance:** A full 150-case live evaluation was completed on `2026-10-13T10:45:41 UTC` against historical dataset snapshot hash `4458b2c305b31859` using `groq/openai/gpt-oss-20b` and `gemini/gemini-3.5-flash-lite`, producing the measured results in `results/metrics.json`. However, a fresh live benchmark run on the current canonical dataset (current hash `211ca23296bb1612`, containing 80 draft variants) has not been run because [`verify_all_records_before_run()`](../evaluation/runner.py) strictly blocks `python -m evaluation.runner --run-all` until human sign-off is completed. The saved historical results are clearly documented as originating from snapshot `4458b2c305b31859` and are not claimed as a new run on the current draft dataset.
 
 ### 1.2 Why the Nominal 150-Case Suite Contains 144 LLM-Eligible Cases (`6` `empty_malformed` Pre-API Exclusions)
 - The full benchmark dataset comprises **150 nominal records**: **50 base cases** (`BASE-001`–`BASE-050`) + **100 adversarial variants** (`VAR-001`–`VAR-100`).
@@ -933,17 +933,31 @@ Every confidence value across the suite originates from one of four verified sou
 - **Planted Negative Control Harness:** Negative control `grounded_v2_bad` (disabled gate, forced guessing) is verified offline to fail the regression gate (`passed_gate == False`), proving regression detection sensitivity.
 """
 
-    content = f"""# VerityBench — Adversarial Reliability Evaluation Report
+    content = f"""# VerityBench — Adversarial Reliability Evaluation Report (Historical Benchmark Run)
 
-**Generated from Saved Results (`results/metrics.json`):** `{metrics.get('generated_at_utc', '')}`
+**Historical Run Timestamp:** `{metrics.get('generated_at_utc', '')}` | **Historical Benchmark Dataset Hash:** `{metrics.get('dataset_hash', '')}`
 **Fixed SUT Model:** `{metrics.get('sut_model_id', '')}` | **Fixed Judge Model:** `{metrics.get('judge_model_id', '')}`
-**Dataset Hash:** `{metrics.get('dataset_hash', '')}` | **Gate Forced-Abstention Fallback Confidence:** `GATE_FALLBACK_CONFIDENCE = {GATE_FALLBACK_CONFIDENCE:.2f}`
+**Gate Forced-Abstention Fallback Confidence:** `GATE_FALLBACK_CONFIDENCE = {GATE_FALLBACK_CONFIDENCE:.2f}`
 {unmet_flag_banner}
+> [!IMPORTANT]
+> **PROVENANCE DISCLOSURE: HISTORICAL BENCHMARK RUN VS. CURRENT DATASET GOVERNANCE**
+>
+> 1. **Historical Benchmark Provenance:**
+>    The performance metrics, accuracy tables, hallucination rates, calibration curves, and failure clusters reported below are **empirical historical measurements** from a live benchmark run executed on **{metrics.get('generated_at_utc', '')}** against historical dataset snapshot hash **`{metrics.get('dataset_hash', '')}`** using `groq/openai/gpt-oss-20b` (System Under Test) and `gemini/gemini-3.5-flash-lite` (independent judge). All 218 raw provider responses are persisted in `.cache/llm_responses/`.
+>
+> 2. **Current Repository Dataset Status & Governance Refusal:**
+>    In the current canonical dataset (`data/variants.jsonl`, current dataset hash `211ca23296bb1612`), exactly **20 variants (`VAR-001`–`VAR-020`)** are human-verified, while **80 variants (`VAR-021`–`VAR-100`)** remain in **`status: "draft"`** (`verified_by: null`, `verified_on: null`) pending final human sign-off.
+>    Per project governance rules, the strict verification gate ([`verify_all_records_before_run()`](../evaluation/runner.py)) **actively blocks and refuses** new live benchmark runs (`python -m evaluation.runner --run-all` / `--check-gate`) while draft variants exist.
+>
+> 3. **Non-Equivalence Disclosure:**
+>    These historical results **do not** represent a new benchmark run on the current draft-containing dataset. They are retained and analyzed here to report genuine empirical findings from the completed run, demonstrate calibration and clustering methodologies, and document infrastructure limitations, without fabricating human reviews or weakening the governance gate.
+
 ---
 
 ## 1. Executive Summary & Verification Gate Status
 
 - **Dataset Verification Status:** 50 base cases (`status: "verified"` by sayanpal1499), 20 adversarial variants (`status: "verified"` by sayanpal1499 across Batches 1–2 `VAR-001`–`VAR-020`), 80 adversarial variants (`status: "draft"`, `verified_by: null`, `verified_on: null` pending final human sign-off across Batches 3–10 `VAR-021`–`VAR-100`), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
+- **Benchmark Run Provenance:** Historical live evaluation completed on {metrics.get('generated_at_utc', '')} (dataset snapshot {metrics.get('dataset_hash', '')}); new live evaluation correctly blocked on current canonical dataset (hash 211ca23296bb1612) by strict governance gate.
 - **LLM-Evaluated Accuracy (`grounded_v1`, `N={eval_llm_n}` Eligible Cases excluding `{excluded_pre_api}` pre-API `empty_malformed` rejections):** `{llm_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{llm_cb[0]*100:.1f}%, {llm_cb[1]*100:.1f}%]`.
 - **Nominal Suite Accuracy (`grounded_v1`, All `{ov_acc['denominator']}` Records including `{excluded_pre_api}` deterministic pre-API `InputValidationError` rejections):** `{ov_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{ov_cb[0]*100:.1f}%, {ov_cb[1]*100:.1f}%]`.
 - **Output-Level Hallucination Rate (`grounded_v1`):** `{ov_hall['numerator']}/{ov_hall['denominator']}` (`{ov_hall['rate']*100:.1f}%`).

@@ -1,14 +1,28 @@
-# VerityBench — Adversarial Reliability Evaluation Report
+# VerityBench — Adversarial Reliability Evaluation Report (Historical Benchmark Run)
 
-**Generated from Saved Results (`results/metrics.json`):** `2026-10-13T10:45:41.565406+00:00`
+**Historical Run Timestamp:** `2026-10-13T10:45:41.565406+00:00` | **Historical Benchmark Dataset Hash:** `4458b2c305b31859`
 **Fixed SUT Model:** `groq/openai/gpt-oss-20b` | **Fixed Judge Model:** `gemini/gemini-3.5-flash-lite`
-**Dataset Hash:** `4458b2c305b31859` | **Gate Forced-Abstention Fallback Confidence:** `GATE_FALLBACK_CONFIDENCE = 0.50`
+**Gate Forced-Abstention Fallback Confidence:** `GATE_FALLBACK_CONFIDENCE = 0.50`
+
+> [!IMPORTANT]
+> **PROVENANCE DISCLOSURE: HISTORICAL BENCHMARK RUN VS. CURRENT DATASET GOVERNANCE**
+>
+> 1. **Historical Benchmark Provenance:**
+>    The performance metrics, accuracy tables, hallucination rates, calibration curves, and failure clusters reported below are **empirical historical measurements** from a live benchmark run executed on **2026-10-13T10:45:41.565406+00:00** against historical dataset snapshot hash **`4458b2c305b31859`** using `groq/openai/gpt-oss-20b` (System Under Test) and `gemini/gemini-3.5-flash-lite` (independent judge). All 218 raw provider responses are persisted in `.cache/llm_responses/`.
+>
+> 2. **Current Repository Dataset Status & Governance Refusal:**
+>    In the current canonical dataset (`data/variants.jsonl`, current dataset hash `211ca23296bb1612`), exactly **20 variants (`VAR-001`–`VAR-020`)** are human-verified, while **80 variants (`VAR-021`–`VAR-100`)** remain in **`status: "draft"`** (`verified_by: null`, `verified_on: null`) pending final human sign-off.
+>    Per project governance rules, the strict verification gate ([`verify_all_records_before_run()`](../evaluation/runner.py)) **actively blocks and refuses** new live benchmark runs (`python -m evaluation.runner --run-all` / `--check-gate`) while draft variants exist.
+>
+> 3. **Non-Equivalence Disclosure:**
+>    These historical results **do not** represent a new benchmark run on the current draft-containing dataset. They are retained and analyzed here to report genuine empirical findings from the completed run, demonstrate calibration and clustering methodologies, and document infrastructure limitations, without fabricating human reviews or weakening the governance gate.
 
 ---
 
 ## 1. Executive Summary & Verification Gate Status
 
 - **Dataset Verification Status:** 50 base cases (`status: "verified"` by sayanpal1499), 20 adversarial variants (`status: "verified"` by sayanpal1499 across Batches 1–2 `VAR-001`–`VAR-020`), 80 adversarial variants (`status: "draft"`, `verified_by: null`, `verified_on: null` pending final human sign-off across Batches 3–10 `VAR-021`–`VAR-100`), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
+- **Benchmark Run Provenance:** Historical live evaluation completed on 2026-10-13T10:45:41.565406+00:00 (dataset snapshot 4458b2c305b31859); new live evaluation correctly blocked on current canonical dataset (hash 211ca23296bb1612) by strict governance gate.
 - **LLM-Evaluated Accuracy (`grounded_v1`, `N=144` Eligible Cases excluding `6` pre-API `empty_malformed` rejections):** `112/144 (77.8%)`, Base-Case Cluster Bootstrap 95% CI: `[71.1%, 84.7%]`.
 - **Nominal Suite Accuracy (`grounded_v1`, All `150` Records including `6` deterministic pre-API `InputValidationError` rejections):** `118/150 (78.7%)`, Base-Case Cluster Bootstrap 95% CI: `[72.7%, 85.0%]`.
 - **Output-Level Hallucination Rate (`grounded_v1`):** `5/144` (`3.5%`).
