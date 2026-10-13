@@ -2073,22 +2073,22 @@
         }
       },
       "intrinsic_raw_model_calibration": {
-        "total_samples": 144,
+        "total_samples": 112,
         "missing_or_invalid_samples": 0,
-        "ece": 0.0064,
+        "ece": 0.0082,
         "ece_bootstrap_ci_95": [
-          0.0056,
-          0.0072
+          0.0075,
+          0.0088
         ],
         "brier_score": 0.0001,
         "bins": [
           {
             "bin_index": 0,
             "bin_range": "[0.0, 0.1)",
-            "count": 32,
-            "mean_confidence": 0.0,
-            "accuracy": 0.0,
-            "abs_gap": 0.0,
+            "count": 0,
+            "mean_confidence": null,
+            "accuracy": null,
+            "abs_gap": null,
             "weighted_gap": 0.0
           },
           {
@@ -2170,10 +2170,11 @@
             "mean_confidence": 0.9918,
             "accuracy": 1.0,
             "abs_gap": 0.0082,
-            "weighted_gap": 0.0064
+            "weighted_gap": 0.0082
           }
         ],
         "empty_bins": [
+          "[0.0, 0.1)",
           "[0.1, 0.2)",
           "[0.2, 0.3)",
           "[0.3, 0.4)",
@@ -2193,9 +2194,9 @@
           },
           "confidence_lt_0_90": {
             "numerator": 0,
-            "denominator": 32,
-            "accuracy": 0.0,
-            "mean_confidence": 0.0
+            "denominator": 0,
+            "accuracy": null,
+            "mean_confidence": null
           }
         }
       },

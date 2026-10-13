@@ -565,7 +565,7 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **PowerShell:**
 ```powershell
-# 1. Run the 66-test offline test suite (zero external API calls)
+# 1. Run the 69-test offline test suite (zero external API calls)
 .\\.venv\\Scripts\\python.exe -m pytest -v
 
 # 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)
@@ -581,7 +581,7 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **Bash:**
 ```bash
-# 1. Run the 66-test offline test suite (zero external API calls)
+# 1. Run the 69-test offline test suite (zero external API calls)
 ./.venv/bin/python -m pytest -v
 
 # 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)
@@ -1087,7 +1087,7 @@ Every confidence value across the suite originates from one of four verified sou
 >
 > The 3-run uncached noise-floor procedure (`bypass_cache=True, temperature=0.0, seed=42`) and candidate prompt regression comparison (`grounded_v2` and planted negative-control `grounded_v2_bad` vs. `grounded_v1`) were safely paused during execution to preserve API rate-limit quota and avoid duplicate executions. Live measurements are strictly **not fabricated or assumed**.
 >
-> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 66 passing tests. When authorized, resume execution via:
+> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized, resume execution via:
 > `python -m evaluation.runner --run-noise-floor --run-regression`
 
 - **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).

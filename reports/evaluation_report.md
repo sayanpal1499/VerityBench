@@ -28,7 +28,7 @@
 - **Output-Level Hallucination Rate (`grounded_v1`):** `5/144` (`3.5%`).
 - **Claim-Level Hallucination & Deferral Breakdown (`grounded_v1`):** Bad claims `5/98` (`5.1%`); Confirmed supported claims: `93`; Layer-2 deterministically decided: `36`; Layer-2 deferred (`needs_judge`): `58` (unresolved `needs_judge`: `0`).
 - **Ablation vs. `naive_v0`:** Accuracy delta `+50.0 pp`; Output hallucination delta `+2.8 pp`.
-- **Confidence Calibration (`grounded_v1`, `N=144` LLM-Evaluated Cases; Gate Fallback `GATE_FALLBACK_CONFIDENCE = 0.50`):** Post-Gate ECE = `0.0064` (Brier = `0.0001`); Intrinsic Raw-Model ECE = `0.0064` (Brier = `0.0001`); Genuine Model Predictions ECE = `0.0082` (`N=112`).
+- **Confidence Calibration (`grounded_v1`, `N=144` LLM-Evaluated Cases; Gate Fallback `GATE_FALLBACK_CONFIDENCE = 0.50`):** Post-Gate ECE = `0.0064` (Brier = `0.0001`); Intrinsic Raw-Model ECE = `0.0082` (Brier = `0.0001`); Genuine Model Predictions ECE = `0.0082` (`N=112`).
 - **Failure Clustering Status:** 3 distinct defensible failure clusters identified across 37 observed failures (`OUTPUT_SCHEMA_TRUNCATION`: 17/37 [46.0%], `API_RATE_LIMIT_EXHAUSTION`: 15/37 [40.5%], `FABRICATED_CONTENT`: 5/37 [13.5%]). Meets the >= 3 defensible clusters requirement.
 
 ### 1.1 Preflight API Verification & Model Selection
@@ -137,7 +137,7 @@ Every confidence value across the suite originates from one of four verified sou
 
 ### 5.2 Disaggregated Calibration Metrics
 - **Post-Gate Operational System Calibration (All Evaluated Cases, `N = 144`):** ECE = `0.0064`, Brier = `0.0001` across `N = 144` records.
-- **Intrinsic Raw-Model Calibration (Pre-Gate, `N = 144`):** ECE = `0.0064`, Brier = `0.0001` across `N = 144` records.
+- **Intrinsic Raw-Model Calibration (Pre-Gate, `N = 144`):** ECE = `0.0082`, Brier = `0.0001` across `N = 144` records.
 - **Genuine Completed Model Predictions (`N = 112`):** ECE = `0.0082`, Brier = `0.0001` across `N = 112` cases.
 - **Pre-API Input Validation Exclusions:** Exactly `6` cases (`empty_malformed`) were excluded from calibration computation because deterministic pre-API input validation rejections (`InputValidationError`) do not produce model probability.
 
@@ -199,7 +199,7 @@ Every confidence value across the suite originates from one of four verified sou
 >
 > The 3-run uncached noise-floor procedure (`bypass_cache=True, temperature=0.0, seed=42`) and candidate prompt regression comparison (`grounded_v2` and planted negative-control `grounded_v2_bad` vs. `grounded_v1`) were safely paused during execution to preserve API rate-limit quota and avoid duplicate executions. Live measurements are strictly **not fabricated or assumed**.
 >
-> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 66 passing tests. When authorized, resume execution via:
+> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized, resume execution via:
 > `python -m evaluation.runner --run-noise-floor --run-regression`
 
 - **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).
@@ -233,7 +233,7 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **PowerShell:**
 ```powershell
-# 1. Run the 66-test offline test suite (zero external API calls)
+# 1. Run the 69-test offline test suite (zero external API calls)
 .\.venv\Scripts\python.exe -m pytest -v
 
 # 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)
@@ -249,7 +249,7 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **Bash:**
 ```bash
-# 1. Run the 66-test offline test suite (zero external API calls)
+# 1. Run the 69-test offline test suite (zero external API calls)
 ./.venv/bin/python -m pytest -v
 
 # 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)

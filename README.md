@@ -8,7 +8,7 @@ VerityBench is a custom, zero-framework evaluation harness and adversarial bench
 4. **3-Layer Programmatic Hallucination Detection & In-Sample Rule-Development Audit (`45` Claims)** (`evaluation/hallucination.py`)
 5. **Dual-Track Confidence Calibration (Intrinsic Raw Model vs. Post-Gate System ECE & Brier Score on `N = 144` LLM-Evaluated Cases)** (`evaluation/calibration.py`)
 6. **Failure Mode Clustering, Root-Cause Remediation & Causal Probes** (`evaluation/clustering.py`)
-7. **Prompt-Regression Testing (`grounded_v2` vs. `grounded_v2_bad`) & 3-Run Noise-Floor Estimation** (`evaluation/regression.py`, `evaluation/runner.py`)
+7. **Prompt-Regression Testing (`grounded_v2` vs. `grounded_v2_bad`) & 3-Run Noise-Floor Estimation Harness** (`evaluation/regression.py`, `evaluation/runner.py` — fully implemented pipeline verified offline with synthetic mocks; live multi-run executions remain unrun/paused to preserve provider quotas)
 
 ---
 
@@ -20,7 +20,7 @@ VerityBench/
 │   ├── documents/                         # 8 multi-paragraph domain source documents (DOC-001..DOC-008, 417-485 words each)
 │   ├── base_cases.jsonl                   # 50 human-verified base QA cases (38 answerable, 12 unanswerable)
 │   ├── regression_cases.jsonl             # 40 canonical regression cases inheriting verified ground truth from BASE-001..BASE-040 (32 answerable, 8 unanswerable)
-│   ├── variants.jsonl                     # 100 adversarial variants across 10 transformation categories (currently status="draft")
+│   ├── variants.jsonl                     # 100 adversarial variants across 10 transformation categories (20 verified, 80 status="draft")
 │   ├── variants_review.csv                # Companion tabular review export for all 100 variants
 │   ├── variants_final_review_checklist.md # Consolidated batch-by-batch human-review checklist & audit log (VAR-001..VAR-100)
 │   ├── audit_claims.jsonl                 # 45 human-verified in-sample rule-development claims for detector benchmarking
@@ -46,7 +46,7 @@ VerityBench/
 │   └── audit_benchmark_offline.json       # Measured offline Layer-1/2 detector audit on all 45 in-sample audit claims
 ├── reports/
 │   └── evaluation_report.md               # Comprehensive technical evaluation report (includes reserved multi_hop_conditional design)
-└── tests/                                 # 66 offline unit & integration tests (zero external API calls)
+└── tests/                                 # 69 offline unit & integration tests (zero external API calls)
 ```
 
 ### Key Architectural Choices & Reconciled Code Constants
@@ -127,11 +127,11 @@ cp .env.example .env
 ## 4. Reproducible Commands (PowerShell & Bash)
 
 ### A. Offline Test Suite & Dataset Validators (Zero External API Calls)
-All `66` unit and integration tests run completely offline using deterministic fixtures and monkeypatched fake-LLM mocks:
+All `69` unit and integration tests run completely offline using deterministic fixtures and monkeypatched fake-LLM mocks:
 
 **PowerShell:**
 ```powershell
-# 1. Run the complete 66-test offline suite
+# 1. Run the complete 69-test offline suite
 .\.venv\Scripts\python.exe -m pytest -v
 
 # 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 20 verified + 80 draft variants)
@@ -155,7 +155,7 @@ print(json.dumps({k: v for k, v in res.items() if k != 'evaluated_records'}, ind
 
 **Bash:**
 ```bash
-# 1. Run the complete 66-test offline suite
+# 1. Run the complete 69-test offline suite
 ./.venv/bin/python -m pytest -v
 
 # 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 20 verified + 80 draft variants)
@@ -178,6 +178,12 @@ print(json.dumps({k: v for k, v in res.items() if k != "evaluated_records"}, ind
 ```
 
 ### B. Live Evaluation, Causal Probes & Regression CLI Workflows (Requires Promoted `variants.jsonl` + API Keys)
+
+> [!NOTE]
+> **Live Experiment Execution Status: Incomplete / Unrun on Live API**
+>
+> While the regression harness, negative-control detection, noise-floor estimator, and causal probes are fully implemented and verified offline (69/69 passing tests), live uncached executions (`--run-all`, `--run-noise-floor`, `--run-regression`, `--run-probes`) are currently **blocked** by the strict governance gate (due to 80 draft variants) and were paused to preserve live API rate-limit quotas. Live empirical numbers for these multi-run experiments are **not fabricated or claimed**.
+
 Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to `"verified"` (and when live API execution is authorized):
 
 **PowerShell:**
@@ -221,7 +227,7 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
 ## 5. Summary of Offline Measured Results, Fake-LLM Dry Runs, Recorded Live Preflight API Results, and the Unrun Full Benchmark
 
 1. **Synthetic / Fake-LLM Unit & Integration Test Suite (`pytest -v` — Offline Dry Runs):**
-   - **66 / 66 passing (`100%`)** in `~4.3s` with zero network calls during `pytest`.
+   - **69 / 69 passing (`100%`)** in `~4.2s` with zero network calls during `pytest`.
    - Includes mocked integration dry runs for `execute_verified_evaluation`, 3-run noise-floor estimation (`run_noise_floor_experiment`), `grounded_v2` vs. `grounded_v2_bad` head-to-head comparison (`compare_grounded_v2_vs_bad`), and counterfactual causal probes (`execute_causal_probes_from_saved_failures`). These fake-LLM unit-test dry runs validate code integration paths only and are **never** reported as live model accuracy.
 2. **Offline Deterministic Hallucination Detector Benchmark (`45` Verified Human-Labeled Claims in `data/audit_claims.jsonl`, `allow_llm_judge=False` — Non-Independent In-Sample Rule-Development Set):**
    - **Important Scope Disclosure:** The 45 claims in `data/audit_claims.jsonl` were constructed and boundary-reviewed during Layer-2 deterministic rule development. Accordingly, the metrics below measure **in-sample rule consistency on the rule-development audit set**, not generalization to an independent blind test set.
@@ -242,5 +248,8 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
 4. **Live Benchmark Status: Historical Results (`4458b2c305b31859`) vs. Current Dataset Governance (`211ca23296bb1612`):**
    - **Historical Live Benchmark Run (Preserved in `results/`):** A full 150-case live evaluation was completed on `2026-10-13T10:45:41 UTC` against historical dataset snapshot hash `4458b2c305b31859` using `groq/openai/gpt-oss-20b` and `gemini/gemini-3.5-flash-lite`, producing the measured results in `results/metrics.json` (77.8% LLM-evaluated accuracy, 3.5% hallucination rate, 0.0064 ECE, 3 empirical failure clusters, and 218 responses in `.cache/llm_responses/`).
    - **Current Canonical Dataset Status (Strict Gate Refusal):** On the current canonical dataset (`data/variants.jsonl`, hash `211ca23296bb1612`), Batches 1–2 (`VAR-001`–`VAR-020`) are human-verified, while Batches 3–10 (`VAR-021`–`VAR-100`, 80 variants) remain in `status: "draft"` pending final human sign-off. Consequently, `verify_all_records_before_run()` strictly blocks `python -m evaluation.runner --run-all` from running against the current dataset. The saved historical results are clearly documented as originating from snapshot `4458b2c305b31859` and are not claimed as a new run on the current draft dataset.
+5. **Live Experiment Status Disclosure (Noise Floor, Prompt Regression, Causal Probes):**
+   - **Offline Harness Verification:** The regression baseline dataset (`40` cases in `data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), noise-floor estimator, causal probes, and negative control prompt (`grounded_v2_bad`) are fully implemented and verified offline across the 69-test suite.
+   - **Unrun Live Execution:** Live multi-run experiments (`--run-noise-floor`, `--run-regression`, `--run-probes`) have **not** been executed against the live API to protect provider rate-limit quotas and remain blocked by the draft variant governance gate. They are strictly not claimed as completed live measurements.
 
 See [`reports/evaluation_report.md`](reports/evaluation_report.md) for the complete technical report, methodology, pre-run failure hypotheses, calibration equations, regression workflow, and the reserved 11th adversarial category (`multi_hop_conditional`).
