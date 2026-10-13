@@ -1,34 +1,16 @@
-# VerityBench
-
-### LLM Reliability Evaluation Harness & Adversarial Audit Framework
+# VerityBench — LLM Reliability Evaluation Harness
 
 A zero-framework adversarial evaluation harness and audit pipeline for grounded Document Question Answering (QA), engineered from scratch in Python to deliver auditable reliability metrics, deterministic hallucination detection, dual-track confidence calibration, and strict ground-truth governance without external evaluation abstractions.
 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-69%20passed%20%28offline%29-brightgreen)](#quick-start--reproducibility-guide)
 [![Design](https://img.shields.io/badge/architecture-zero--framework%20custom-informational)](#system-architecture)
-[![SUT Model](https://img.shields.io/badge/SUT-Groq%20%2F%20GPT--OSS--20B-blueviolet)](#key-results--authoritative-metrics)
-[![Judge Model](https://img.shields.io/badge/Judge-Gemini%203.5%20Flash--Lite-4285F4?logo=google)](#key-results--authoritative-metrics)
+[![SUT Model](https://img.shields.io/badge/SUT-Groq%20%2F%20GPT--OSS--20B-blueviolet)](#key-results--current-status)
+[![Judge Model](https://img.shields.io/badge/Judge-Gemini%203.5%20Flash--Lite-4285F4?logo=google)](#key-results--current-status)
 
 ---
 
-## Table of Contents
-
-- [Executive Summary](#executive-summary)
-- [Key Results & Authoritative Metrics](#key-results--authoritative-metrics)
-- [System Architecture](#system-architecture)
-- [Core Engineering Features](#core-engineering-features)
-- [Dataset Governance & Verification Gate](#dataset-governance--verification-gate)
-- [Quick Start & Reproducibility Guide](#quick-start--reproducibility-guide)
-- [Evaluation Findings & Visualizations](#evaluation-findings--visualizations)
-- [Failure Analysis & Causal Probes](#failure-analysis--causal-probes)
-- [Technical Limitations & Methodological Disclosures](#technical-limitations--methodological-disclosures)
-- [Repository Structure](#repository-structure)
-- [Reserved Interview Extension](#reserved-interview-extension)
-
----
-
-## Executive Summary
+## Key Results & Current Status
 
 VerityBench evaluates the factual reliability, selective abstention, and robustness of Large Language Models performing document-grounded question answering under adversarial stress. Built from scratch without third-party evaluation wrappers (`RAGAS`, `TruLens`, `DeepEval`, or `LangChain`), it provides complete transparency into prompt contracts, token accounting, quote verification, and scoring mechanics.
 
@@ -39,7 +21,7 @@ VerityBench evaluates the factual reliability, selective abstention, and robustn
   SUT Model: groq/openai/gpt-oss-20b  |  Judge Model: gemini/gemini-3.5-flash-lite
 ```
 
-### High-Level Findings
+### High-Level Summary
 
 - **Offline Verifiability:** 69 of 69 unit and integration tests pass offline in ~4 seconds with zero API calls.
 - **Evidence-Grounded Accuracy:** Under `grounded_v1`, the system achieved **77.8% accuracy (112/144)** across LLM-evaluated cases (95% bootstrap CI: `[71.1%, 84.7%]`) and **100.0% accuracy (89/89)** on substantive completed answers.
@@ -52,16 +34,12 @@ VerityBench evaluates the factual reliability, selective abstention, and robustn
 > The empirical results reported below represent a historical run executed on **2026-10-13T10:45:41.565406+00:00** against dataset snapshot hash `4458b2c305b31859` (persisted in `.cache/llm_responses/`).
 > In the current canonical dataset (hash `211ca23296bb1612`), **20 variants are verified and 80 remain in draft status**. The strict verification gate intentionally halts new live benchmark runs until human sign-off is completed. Historical metrics are retained for full transparency and are not claimed as a rerun of the current dataset.
 
----
-
-## Key Results & Authoritative Metrics
+### Authoritative Per-Configuration Accounting
 
 VerityBench reports evaluation metrics across explicitly disaggregated denominators:
 1. **Nominal Suite ($N=150$):** All base cases ($50$) and variants ($100$).
 2. **LLM-Evaluated ($N=144$):** Excludes $6$ deterministic pre-API input rejections (`VAR-095`–`VAR-100`).
 3. **Substantive Answers:** Queries where the system completed generation and returned an answer ($89$ for `grounded_v1`, $15$ for `naive_v0`).
-
-### Authoritative Per-Configuration Accounting
 
 | Metric | Definition | `grounded_v1` (Gate ON) | `naive_v0` (Ablation) | Explanatory Notes |
 | :--- | :--- | :---: | :---: | :--- |
@@ -84,6 +62,65 @@ VerityBench reports evaluation metrics across explicitly disaggregated denominat
 > [!WARNING]
 > **Ablation Confounding Note:**
 > The historical accuracy difference of $+50.0\text{ pp}$ between `grounded_v1` and `naive_v0` is heavily confounded by 129 provider rate-limit and token-exhaustion fallbacks during the naive run. It must not be cited as a pure measure of evidence gate effectiveness.
+
+---
+
+## Repository Structure
+
+```
+VerityBench/
+├── data/
+│   ├── documents/                         # 8 synthetic domain specifications (DOC-001..DOC-008, 417–485 words each)
+│   ├── base_cases.jsonl                   # 50 verified base QA cases (38 answerable, 12 unanswerable)
+│   ├── regression_cases.jsonl             # 40 canonical regression cases (inherited from BASE-001..BASE-040)
+│   ├── variants.jsonl                     # 100 adversarial variants (20 verified, 80 draft)
+│   ├── variants_review.csv                # Tabular review export for all 100 variants
+│   ├── variants_final_review_checklist.md # Batch audit log and review checklist (VAR-001..100)
+│   ├── audit_claims.jsonl                 # 45 verified in-sample claims for hallucination benchmarking
+│   ├── audit_claims_review.csv            # Companion review log for audit claims
+│   └── audit_claims_pending_review.md     # Review rationale log for AUD-001..045
+├── src/
+│   ├── schemas.py                         # Strict Pydantic v2 schemas (QAOutput, QATrace, CaseRecords)
+│   ├── prompts.py                         # Versioned prompt templates (grounded_v1, naive_v0, etc.)
+│   ├── llm_client.py                      # Multi-provider client (Groq + Gemini), SHA-256 disk caching
+│   └── qa_system.py                       # Pre-API validation, JSON repair, evidence-quote gate
+├── evaluation/
+│   ├── dataset.py                         # Loaders, verbatim evidence validators & verification gates
+│   ├── adversarial.py                     # Deterministic generator for adversarial perturbations
+│   ├── scoring.py                         # Deterministic rubric scoring + Layer-3 semantic judge
+│   ├── hallucination.py                   # 3-layer claim-level hallucination detection engine
+│   ├── calibration.py                     # 10-bin ECE, Brier score, reliability diagrams & CIs
+│   ├── clustering.py                      # Failure mode clustering & counterfactual causal probes
+│   ├── regression.py                      # Regression baseline runner, noise-floor estimator
+│   ├── metrics.py                         # Slice metrics aggregations & Matplotlib chart generation
+│   └── runner.py                          # Evaluation orchestrator, CLI entry point, report generator
+├── results/
+│   ├── preflight_check.json               # Recorded live API preflight check & smoke tests
+│   └── audit_benchmark_offline.json       # Measured offline Layer-1/2 detector audit results
+├── reports/
+│   ├── evaluation_report.md               # Comprehensive technical evaluation report
+│   └── figures/                           # Generated evaluation charts
+│       ├── accuracy_by_category.png
+│       ├── hallucination_rate_by_category.png
+│       ├── calibration_curve.png
+│       └── failure_distribution.png
+├── tests/                                 # 69 offline unit & integration tests (pytest)
+├── requirements.txt                       # Pinned project dependencies
+└── README.md                              # Project evaluation documentation and benchmarks
+```
+
+---
+
+## Table of Contents
+
+- [Key Results & Current Status](#key-results--current-status)
+- [Repository Structure](#repository-structure)
+- [System Architecture](#system-architecture)
+- [Key Engineering Features](#key-engineering-features)
+- [Quick Start & Reproducibility Guide](#quick-start--reproducibility-guide)
+- [Evaluation Results & Reports](#evaluation-results--reports)
+- [Dataset Governance & Limitations](#dataset-governance--limitations)
+- [Proposed Future Work: Multi-Hop Conditional Reasoning](#proposed-future-work-multi-hop-conditional-reasoning)
 
 ---
 
@@ -140,7 +177,7 @@ flowchart TD
 
 ---
 
-## Core Engineering Features
+## Key Engineering Features
 
 ### 1. Structured Output Validation & Repair
 - **Schema Enforcement:** Every model response is strictly parsed against the Pydantic v2 `QAOutput` schema ([`src/schemas.py`](src/schemas.py)):
@@ -184,40 +221,12 @@ Adversarial perturbations applied across verified base cases:
 8. `format_edge`: Markdown tables, escaped punctuation, irregular casing.
 9. `prompt_injection`: Adversarial system override directives.
 10. `empty_malformed`: Malformed, whitespace-only, or extreme-length questions.
-*(Category 11, `multi_hop_conditional`, is reserved on paper for interview extension).*
+*(Multi-hop conditional reasoning is discussed under [Proposed Future Work](#proposed-future-work-multi-hop-conditional-reasoning)).*
 
 ### 7. Prompt Regression & Noise-Floor Pipeline
 - **Frozen Regression Seed:** 40 canonical regression cases ([`data/regression_cases.jsonl`](data/regression_cases.jsonl)) inheriting verified ground truth from base cases.
 - **3-Run Noise Floor:** Evaluates answer stability and flips across uncached runs at `temperature=0.0`.
-- **Planted Negative Control:** Verifies that a intentionally degraded prompt (`grounded_v2_bad`) fails the regression gate, ensuring regression test sensitivity.
-
----
-
-## Dataset Governance & Verification Gate
-
-VerityBench enforces a zero-trust verification model: **unverified or draft test records cannot be evaluated in live benchmark runs.**
-
-```
-[ data/base_cases.jsonl ]      --> 50 Verified Base Cases (50/50 Verified)
-[ data/regression_cases.jsonl] --> 40 Canonical Regression Cases (40/40 Inherited)
-[ data/audit_claims.jsonl ]    --> 45 In-Sample Audit Claims (45/45 Verified)
-[ data/variants.jsonl ]        --> 100 Adversarial Variants (20 Verified / 80 Draft)
-                                              |
-                                              v
-                         [ verify_all_records_before_run() ]
-                         Blocks live execution until 80 draft
-                         records receive individual sign-off.
-```
-
-### Current Dataset Status
-
-| Dataset File | Total Records | Current Status | Verification Metadata | Governance Notes |
-| :--- | :---: | :---: | :--- | :--- |
-| `data/documents/DOC-001..008.txt` | 8 | **Complete** | Canonical domain specifications | 417–485 words each; zero web pretraining leakage. |
-| [`data/base_cases.jsonl`](data/base_cases.jsonl) | 50 | **Verified (50/50)** | `verified_by="sayanpal1499"`, `2026-10-12` | 38 answerable + 12 unanswerable cases. |
-| [`data/regression_cases.jsonl`](data/regression_cases.jsonl) | 40 | **Inherited (40/40)** | `status="inherited_from_base_case"` | Inherited directly from `BASE-001`–`BASE-040`. |
-| [`data/audit_claims.jsonl`](data/audit_claims.jsonl) | 45 | **Verified (45/45)** | `verified_by="sayanpal1499"`, `2026-10-13` | 15 supported, 15 contradicted, 15 unsupported. |
-| [`data/variants.jsonl`](data/variants.jsonl) | 100 | **20 Verified / 80 Draft** | `VAR-001`–`VAR-020` verified; `VAR-021`–`VAR-100` draft | Live `--run-all` actively blocked until sign-off. |
+- **Planted Negative Control:** Verifies that an intentionally degraded prompt (`grounded_v2_bad`) fails the regression gate, ensuring regression test sensitivity.
 
 ---
 
@@ -337,7 +346,7 @@ Once draft variants are human-reviewed and authorized:
 
 ---
 
-## Evaluation Findings & Visualizations
+## Evaluation Results & Reports
 
 ### 1. Accuracy Across Adversarial Categories
 
@@ -381,7 +390,7 @@ Once draft variants are human-reviewed and authorized:
 
 ---
 
-## Failure Analysis & Causal Probes
+### 4. Failure Mode Clustering & Root Causes
 
 Across the 37 observed failures in `grounded_v1`, failure mode clustering identified three distinct operational causes:
 
@@ -397,83 +406,65 @@ Across the 37 observed failures in `grounded_v1`, failure mode clustering identi
 > **Infrastructure vs. Reasoning Takeaway:**
 > **86.5% of failures (32/37)** were caused by API rate limits and output token cutoffs. Categories such as `source_conflict` (0/10) failed because requests were aborted at the API level before reaching the model. True semantic robustness on those categories requires evaluation with increased token limits and quota headroom.
 
+See [`reports/evaluation_report.md`](reports/evaluation_report.md) for full technical derivations, bootstrap confidence interval calculations, and audit logs.
+
 ---
 
-## Technical Limitations & Methodological Disclosures
+## Dataset Governance & Limitations
 
-To maintain scientific integrity, the following caveats are documented:
+VerityBench enforces a zero-trust verification model: **unverified or draft test records cannot be evaluated in live benchmark runs.**
+
+```
+[ data/base_cases.jsonl ]      --> 50 Verified Base Cases (50/50 Verified)
+[ data/regression_cases.jsonl] --> 40 Canonical Regression Cases (40/40 Inherited)
+[ data/audit_claims.jsonl ]    --> 45 In-Sample Audit Claims (45/45 Verified)
+[ data/variants.jsonl ]        --> 100 Adversarial Variants (20 Verified / 80 Draft)
+                                              |
+                                              v
+                         [ verify_all_records_before_run() ]
+                         Blocks live execution until 80 draft
+                         records receive individual sign-off.
+```
+
+### Current Dataset Status
+
+| Dataset File | Total Records | Current Status | Verification Metadata | Governance Notes |
+| :--- | :---: | :---: | :--- | :--- |
+| `data/documents/DOC-001..008.txt` | 8 | **Complete** | Canonical domain specifications | 417–485 words each; zero web pretraining leakage. |
+| [`data/base_cases.jsonl`](data/base_cases.jsonl) | 50 | **Verified (50/50)** | `verified_by="sayanpal1499"`, `2026-10-12` | 38 answerable + 12 unanswerable cases. |
+| [`data/regression_cases.jsonl`](data/regression_cases.jsonl) | 40 | **Inherited (40/40)** | `status="inherited_from_base_case"` | Inherited directly from `BASE-001`–`BASE-040`. |
+| [`data/audit_claims.jsonl`](data/audit_claims.jsonl) | 45 | **Verified (45/45)** | `verified_by="sayanpal1499"`, `2026-10-13` | 15 supported, 15 contradicted, 15 unsupported. |
+| [`data/variants.jsonl`](data/variants.jsonl) | 100 | **20 Verified / 80 Draft** | `VAR-001`–`VAR-020` verified; `VAR-021`–`VAR-100` draft | Live `--run-all` actively blocked until sign-off. |
+
+### Technical Limitations & Methodological Disclosures
 
 1. **Ablation Confounding:** The historical comparison between `grounded_v1` and `naive_v0` is confounded by 129 provider rate-limit and token-exhaustion fallbacks during the naive run. The accuracy difference must not be interpreted as an unconfounded causal measurement.
-2. **Operational vs. Intrinsic Calibration:** The full-system ECE ($0.0064$) is an operational artifact of pairing 32 error fallbacks (assigned confidence $0.00$) with 112 completed answers (assigned confidence $\ge 0.99$). It does not prove that the underlying model possesses nuanced probabilistic uncertainty.
+2. **Operational vs. Intrinsic Calibration:** The full-system ECE ($0.0064$) is an operational artifact of pairing 32 error fallbacks (assigned confidence $0.00$) with 112 completed answers (assigned confidence $\ge 0.99$). It does not prove that the underlying model possesses nuanced probabilistic uncertainty across intermediate ranges.
 3. **In-Sample Hallucination Audit:** The 45 claims in [`data/audit_claims.jsonl`](data/audit_claims.jsonl) were curated during Layer-2 detector development. Performance ($93.3\%$ agreement, $\kappa = 0.90$) reflects in-sample rule consistency, not generalization to unseen corpora.
 4. **Regression Seed Provenance:** The 40 regression cases in [`data/regression_cases.jsonl`](data/regression_cases.jsonl) inherit ground truth directly from canonical base cases (`BASE-001`–`BASE-040`). They serve as a structural baseline rather than an independently reviewed secondary corpus.
-5. **Pending Live Experiments:** Live multi-run noise-floor experiments and live prompt-regression executions remain unrun on live APIs to preserve provider quotas. Their pipeline implementations are verified offline via synthetic tests.
-
-See [`reports/evaluation_report.md`](reports/evaluation_report.md) for complete technical derivations, bootstrap confidence interval calculations, and audit logs.
+5. **Pending Live Experiments:** Live multi-run noise-floor experiments, prompt regressions, and causal probes remain unrun on live APIs to preserve provider quotas. Their pipeline implementations are verified offline via synthetic mocks.
 
 ---
 
-## Repository Structure
+## Proposed Future Work: Multi-Hop Conditional Reasoning
 
-```
-VerityBench/
-├── data/
-│   ├── documents/                         # 8 synthetic domain specifications (DOC-001..DOC-008)
-│   ├── base_cases.jsonl                   # 50 verified base QA cases (38 answerable, 12 unanswerable)
-│   ├── regression_cases.jsonl             # 40 canonical regression cases (inherited from BASE-001..040)
-│   ├── variants.jsonl                     # 100 adversarial variants (20 verified, 80 draft)
-│   ├── variants_review.csv                # Tabular review export for all 100 variants
-│   ├── variants_final_review_checklist.md # Batch audit log and review checklist (VAR-001..100)
-│   ├── audit_claims.jsonl                 # 45 verified in-sample claims for hallucination benchmarking
-│   ├── audit_claims_review.csv            # Companion review log for audit claims
-│   └── audit_claims_pending_review.md     # Review rationale log for AUD-001..045
-├── src/
-│   ├── schemas.py                         # Pydantic v2 data models (QAOutput, QATrace, CaseRecords)
-│   ├── prompts.py                         # Versioned prompt templates (grounded_v1, naive_v0, etc.)
-│   ├── llm_client.py                      # Multi-provider client (Groq + Gemini), SHA-256 caching
-│   └── qa_system.py                       # Pre-API validation, JSON repair, evidence-quote gate
-├── evaluation/
-│   ├── dataset.py                         # Loaders, verbatim evidence validators & verification gates
-│   ├── adversarial.py                     # Deterministic generator for adversarial perturbations
-│   ├── scoring.py                         # Deterministic rubric scoring + Layer-3 semantic judge
-│   ├── hallucination.py                   # 3-layer claim-level hallucination detection engine
-│   ├── calibration.py                     # 10-bin ECE, Brier score, reliability diagrams & CIs
-│   ├── clustering.py                      # Failure mode clustering & counterfactual causal probes
-│   ├── regression.py                      # Regression baseline runner, noise-floor estimator
-│   ├── metrics.py                         # Slice metrics aggregations & Matplotlib chart generation
-│   └── runner.py                          # Evaluation orchestrator, CLI entry point, report generator
-├── results/
-│   ├── preflight_check.json               # Recorded live API preflight check & smoke tests
-│   └── audit_benchmark_offline.json       # Measured offline Layer-1/2 detector audit results
-├── reports/
-│   ├── evaluation_report.md               # Comprehensive technical evaluation report
-│   └── figures/                           # Generated evaluation charts
-│       ├── accuracy_by_category.png
-│       ├── hallucination_rate_by_category.png
-│       ├── calibration_curve.png
-│       └── failure_distribution.png
-└── tests/                                 # 69 offline unit & integration tests (pytest)
-```
+VerityBench currently implements 10 reasoning categories. Multi-hop conditional reasoning is a proposed extension and is not currently included as an implemented or empirically evaluated benchmark category.
 
----
+The proposed category would test whether a model can combine multiple conditional rules, apply a threshold-dependent change, and calculate the resulting value correctly across distinct document clauses.
 
-## Reserved Interview Extension
+### Illustrative Example
 
-### Category 11: `multi_hop_conditional` (Held Back on Paper)
+A device draws 15 mA in standby. Its current consumption triples when the temperature falls below 0°C. An additional heater draws 10 mA.
 
-VerityBench implements 10 adversarial categories in [`evaluation/adversarial.py`](evaluation/adversarial.py) and holds back **Category 11** on paper for live technical discussion:
+**Question:** What is the total current consumption below 0°C when the heater is active?
 
-- **Target Vulnerability:** Single-paragraph retrieval shortcutting where a model extracts an initial baseline specification from Paragraph 1 while missing a conditional clause in Paragraph 4 that modifies the same quantity.
-- **Specification (Electric Current Draw in Milliamperes, $\text{mA}$):**
-  - *Paragraph 1 (Baseline Specification):*
-    > *"Under standard ambient temperatures (20 °C to 40 °C), the CryoSense Telemetry Module draws a continuous standby current of 15 mA."*
-  - *Paragraph 4 (Sub-Zero Override):*
-    > *"When ambient temperature falls below 0 °C, the core voltage regulator triples its continuous standby current draw to maintain clock stability, and the integrated trace heater draws an additional continuous current of 10 mA."*
-  - *Adversarial Question:*
-    > *"What is the total continuous current draw (in mA) of the CryoSense Telemetry Module while operating in standby at -10 °C?"*
-- **Ground-Truth Derivation:**
-  1. Since $-10\text{ }^\circ\text{C} < 0\text{ }^\circ\text{C}$, the Paragraph 4 sub-zero override applies.
-  2. Voltage regulator standby current: $3 \times 15\text{ mA} = 45\text{ mA}$.
-  3. Integrated trace heater current: $+10\text{ mA}$.
-  4. Total continuous current: $I_{\text{total}} = 45\text{ mA} + 10\text{ mA} = 55\text{ mA}$.
-- **Evidence Contract:** The system must produce `expected_answer = "55 mA"`, set `should_abstain = False`, and cite **both** the Paragraph 1 baseline and Paragraph 4 override sentences in `evidence`.
+**Expected calculation:**
+- Standby current: $15\text{ mA}$
+- Below 0°C, the device current triples: $15 \times 3 = 45\text{ mA}$
+- Heater current: $10\text{ mA}$
+- Total current: $45 + 10 = 55\text{ mA}$
+
+**Expected answer:** **`55 mA`**
+
+> [!NOTE]
+> This is an illustrative proposed test case, not evidence of an implemented benchmark category or a measured model result. This category has not been tested, validated, or included in the reported benchmark metrics.
