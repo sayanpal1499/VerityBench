@@ -61,6 +61,33 @@ def test_assign_initial_failure_cluster_rules() -> None:
         )
         == "POSITION_SENSITIVITY"
     )
+    # API error disaggregation (rate limit vs token exhaustion)
+    err_trunc = {"answer": "System Error Abstention: max completion tokens reached before generating a valid document"}
+    err_rate = {"answer": "System Error Abstention: API failure: Groq HTTP 429: Rate limit reached on tokens per day"}
+    assert (
+        assign_initial_failure_cluster(
+            {"is_correct": False, "category": "source_conflict"}, output_record=err_trunc
+        )
+        == "OUTPUT_SCHEMA_TRUNCATION"
+    )
+    assert (
+        assign_initial_failure_cluster(
+            {"is_correct": False, "category": "prompt_injection"}, output_record=err_rate
+        )
+        == "API_RATE_LIMIT_EXHAUSTION"
+    )
+    assert (
+        assign_initial_failure_cluster(
+            {"is_correct": False, "category": "format_edge"}, output_record=err_trunc
+        )
+        == "OUTPUT_SCHEMA_TRUNCATION"
+    )
+    assert (
+        assign_initial_failure_cluster(
+            {"is_correct": True}, {"has_hallucination": True}
+        )
+        == "FABRICATED_CONTENT"
+    )
 
 
 def test_csv_roundtrip_and_three_cluster_requirement_check(tmp_path: Path) -> None:

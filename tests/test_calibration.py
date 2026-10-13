@@ -1,5 +1,4 @@
-"""Unit tests for Phase 6 calibration and metrics (evaluation/calibration.py, evaluation/metrics.py)."""
-
+import json
 from pathlib import Path
 
 from evaluation.calibration import (
@@ -112,3 +111,89 @@ def test_wilson_and_cluster_bootstrap_intervals() -> None:
     all_m = compute_all_metrics(records)
     assert all_m["overall_all_150"]["numerator"] == 2
     assert all_m["overall_all_150"]["denominator"] == 4
+
+
+def test_calibration_handles_missing_confidence_and_extreme_values() -> None:
+    """Verify compute_ece_and_brier safely filters None/invalid confidence and accurately scores extreme 0/1 values."""
+    # 2 valid extreme cases:
+    # 1. conf=1.0, corr=0 (complete overconfidence): brier = (1 - 0)^2 = 1.0, gap = |0 - 1.0| = 1.0
+    # 2. conf=0.0, corr=1 (complete underconfidence): brier = (0 - 1)^2 = 1.0, gap = |1 - 0.0| = 1.0
+    # Plus None, nan, and invalid string entries that must be filtered out cleanly
+    confs = [1.0, 0.0, None, float("nan"), "invalid_conf"]
+    corrs = [0, 1, 1, 0, 1]
+
+    res = compute_ece_and_brier(confs, corrs, n_bins=10, n_bootstrap=100, seed=42)
+    assert res["total_samples"] == 2
+    assert res["missing_or_invalid_samples"] == 3
+    # Both samples have gap=1.0 -> ECE = (1/2)*1.0 + (1/2)*1.0 = 1.0
+    assert res["ece"] == 1.0
+    # Mean Brier score = (1.0 + 1.0) / 2 = 1.0
+    assert res["brier_score"] == 1.0
+
+
+def test_calibration_disaggregates_api_error_fallbacks() -> None:
+    """compute_full_calibration_report must disaggregate API error fallbacks from genuine model predictions."""
+    records = [
+        # Genuine correct prediction
+        {"case_id": "BASE-001", "category": "base", "confidence": 0.99, "is_correct": True, "abstained": False, "should_abstain": False},
+        # Genuine correct prediction
+        {"case_id": "BASE-002", "category": "base", "confidence": 1.00, "is_correct": True, "abstained": False, "should_abstain": False},
+        # API token-exhaustion error fallback: confidence 0.0 assigned by handler, failed on answerable case
+        {"case_id": "BASE-005", "category": "base", "confidence": 0.00, "is_correct": False, "abstained": True, "should_abstain": False, "error_fallback": True},
+        # Pre-API malformed rejection
+        {"case_id": "VAR-095", "category": "empty_malformed", "confidence": 1.00, "is_correct": True, "abstained": True, "should_abstain": True},
+    ]
+
+    report = compute_full_calibration_report(records, seed=42)
+    assert report["evaluated_records_n"] == 3
+    assert report["excluded_pre_api_validation_records_n"] == 1
+    assert report["api_fallback_records_n"] == 1
+    assert report["valid_model_records_n"] == 2
+
+    # Genuine model predictions only (2 samples, confs 0.99 and 1.0, both correct)
+    valid_cal = report["valid_model_predictions_only"]
+    assert valid_cal["total_samples"] == 2
+    assert valid_cal["brier_score"] < 0.001
+    assert "PROVISIONAL / PIPELINE ARTIFACT DISCLOSURE" in report["pipeline_artifact_disclosure"]
+    assert report["confidence_provenance"]["model_generated_count"] == 2
+    assert report["confidence_provenance"]["api_error_fallback_count"] == 1
+    assert report["confidence_provenance"]["pre_api_validation_count"] == 1
+
+
+def test_confidence_provenance_and_single_bin_isolation_on_saved_records() -> None:
+    """Verify confidence provenance and single-bin concentration on saved benchmark data."""
+    res_dir = Path("results")
+    scored = [
+        json.loads(line)
+        for line in (res_dir / "scored_grounded_v1.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    outputs = {
+        r["case_id"]: r
+        for r in (
+            json.loads(line)
+            for line in (res_dir / "outputs_grounded_v1.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+
+    report = compute_full_calibration_report(scored, outputs_by_id=outputs, seed=42)
+    assert report["evaluated_records_n"] == 144
+    assert report["excluded_pre_api_validation_records_n"] == 6
+    assert report["api_fallback_records_n"] == 32
+    assert report["valid_model_records_n"] == 112
+
+    prov = report["confidence_provenance"]
+    assert prov["model_generated_count"] == 112
+    assert prov["api_error_fallback_count"] == 32
+    assert prov["pre_api_validation_count"] == 6
+    assert prov["gate_fallback_count"] == 0
+
+    # Genuine model predictions: all 112 in single bin [0.9, 1.0]
+    valid_cal = report["valid_model_predictions_only"]
+    assert valid_cal["total_samples"] == 112
+    non_empty_bins = [b for b in valid_cal["bins"] if b["count"] > 0]
+    assert len(non_empty_bins) == 1
+    assert non_empty_bins[0]["bin_range"] == "[0.9, 1.0]"
+    assert non_empty_bins[0]["count"] == 112
+    assert non_empty_bins[0]["accuracy"] == 1.0

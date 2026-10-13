@@ -46,7 +46,7 @@ VerityBench/
 │   └── audit_benchmark_offline.json       # Measured offline Layer-1/2 detector audit on all 45 in-sample audit claims
 ├── reports/
 │   └── evaluation_report.md               # Comprehensive technical evaluation report (includes reserved multi_hop_conditional design)
-└── tests/                                 # 54 offline unit & integration tests (zero external API calls)
+└── tests/                                 # 66 offline unit & integration tests (zero external API calls)
 ```
 
 ### Key Architectural Choices & Reconciled Code Constants
@@ -127,11 +127,11 @@ cp .env.example .env
 ## 4. Reproducible Commands (PowerShell & Bash)
 
 ### A. Offline Test Suite & Dataset Validators (Zero External API Calls)
-All `54` unit and integration tests run completely offline using deterministic fixtures and monkeypatched fake-LLM mocks:
+All `66` unit and integration tests run completely offline using deterministic fixtures and monkeypatched fake-LLM mocks:
 
 **PowerShell:**
 ```powershell
-# 1. Run the complete 54-test offline suite
+# 1. Run the complete 66-test offline suite
 .\.venv\Scripts\python.exe -m pytest -v
 
 # 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 100 draft variants)
@@ -155,7 +155,7 @@ print(json.dumps({k: v for k, v in res.items() if k != 'evaluated_records'}, ind
 
 **Bash:**
 ```bash
-# 1. Run the complete 54-test offline suite
+# 1. Run the complete 66-test offline suite
 ./.venv/bin/python -m pytest -v
 
 # 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 100 draft variants)
@@ -221,7 +221,7 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
 ## 5. Summary of Offline Measured Results, Fake-LLM Dry Runs, Recorded Live Preflight API Results, and the Unrun Full Benchmark
 
 1. **Synthetic / Fake-LLM Unit & Integration Test Suite (`pytest -v` — Offline Dry Runs):**
-   - **54 / 54 passing (`100%`)** in `~2.7s` with zero network calls during `pytest`.
+   - **66 / 66 passing (`100%`)** in `~4.3s` with zero network calls during `pytest`.
    - Includes mocked integration dry runs for `execute_verified_evaluation`, 3-run noise-floor estimation (`run_noise_floor_experiment`), `grounded_v2` vs. `grounded_v2_bad` head-to-head comparison (`compare_grounded_v2_vs_bad`), and counterfactual causal probes (`execute_causal_probes_from_saved_failures`). These fake-LLM unit-test dry runs validate code integration paths only and are **never** reported as live model accuracy.
 2. **Offline Deterministic Hallucination Detector Benchmark (`45` Verified Human-Labeled Claims in `data/audit_claims.jsonl`, `allow_llm_judge=False` — Non-Independent In-Sample Rule-Development Set):**
    - **Important Scope Disclosure:** The 45 claims in `data/audit_claims.jsonl` were constructed and boundary-reviewed during Layer-2 deterministic rule development. Accordingly, the metrics below measure **in-sample rule consistency on the rule-development audit set**, not generalization to an independent blind test set.
