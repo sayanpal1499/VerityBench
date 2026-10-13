@@ -943,7 +943,7 @@ Every confidence value across the suite originates from one of four verified sou
 
 ## 1. Executive Summary & Verification Gate Status
 
-- **Dataset Verification Status:** 50 base cases (`status: "verified"`), 100 adversarial variants (`status: "verified"` by sayanpal1499), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
+- **Dataset Verification Status:** 50 base cases (`status: "verified"` by sayanpal1499), 20 adversarial variants (`status: "verified"` by sayanpal1499 across Batches 1–2 `VAR-001`–`VAR-020`), 80 adversarial variants (`status: "draft"`, `verified_by: null`, `verified_on: null` pending final human sign-off across Batches 3–10 `VAR-021`–`VAR-100`), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
 - **LLM-Evaluated Accuracy (`grounded_v1`, `N={eval_llm_n}` Eligible Cases excluding `{excluded_pre_api}` pre-API `empty_malformed` rejections):** `{llm_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{llm_cb[0]*100:.1f}%, {llm_cb[1]*100:.1f}%]`.
 - **Nominal Suite Accuracy (`grounded_v1`, All `{ov_acc['denominator']}` Records including `{excluded_pre_api}` deterministic pre-API `InputValidationError` rejections):** `{ov_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{ov_cb[0]*100:.1f}%, {ov_cb[1]*100:.1f}%]`.
 - **Output-Level Hallucination Rate (`grounded_v1`):** `{ov_hall['numerator']}/{ov_hall['denominator']}` (`{ov_hall['rate']*100:.1f}%`).

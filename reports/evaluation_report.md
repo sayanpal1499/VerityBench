@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary & Verification Gate Status
 
-- **Dataset Verification Status:** 50 base cases (`status: "verified"`), 100 adversarial variants (`status: "verified"` by sayanpal1499), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
+- **Dataset Verification Status:** 50 base cases (`status: "verified"` by sayanpal1499), 20 adversarial variants (`status: "verified"` by sayanpal1499 across Batches 1–2 `VAR-001`–`VAR-020`), 80 adversarial variants (`status: "draft"`, `verified_by: null`, `verified_on: null` pending final human sign-off across Batches 3–10 `VAR-021`–`VAR-100`), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
 - **LLM-Evaluated Accuracy (`grounded_v1`, `N=144` Eligible Cases excluding `6` pre-API `empty_malformed` rejections):** `112/144 (77.8%)`, Base-Case Cluster Bootstrap 95% CI: `[71.1%, 84.7%]`.
 - **Nominal Suite Accuracy (`grounded_v1`, All `150` Records including `6` deterministic pre-API `InputValidationError` rejections):** `118/150 (78.7%)`, Base-Case Cluster Bootstrap 95% CI: `[72.7%, 85.0%]`.
 - **Output-Level Hallucination Rate (`grounded_v1`):** `5/144` (`3.5%`).

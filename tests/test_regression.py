@@ -410,32 +410,46 @@ def test_prompt_regression_comparison_and_planted_bad_detector() -> None:
 
 
 def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
-    """Verify the strict evaluation runner accepts verified variants and refuses to run when any variant is draft or any audit claim has needs_human_review=True."""
+    """Verify the strict evaluation runner refuses to run when variants are draft or any audit claim has needs_human_review=True."""
     variants = load_jsonl_variants(Path("data/variants.jsonl"))
     assert len(variants) == 100
+    assert sum(1 for v in variants if v.status == "verified") == 20
+    assert sum(1 for v in variants if v.status == "draft") == 80
     assert all(
         v.status == "verified" and v.verified_by == "sayanpal1499" and v.verified_on == "2026-10-13"
-        for v in variants
+        for v in variants[:20]
+    )
+    assert all(
+        v.status == "draft" and v.verified_by is None and v.verified_on is None
+        for v in variants[20:]
     )
 
-    b_ok, v_ok, d_ok = verify_all_records_before_run(
-        base_cases_path=Path("data/base_cases.jsonl"),
-        variants_path=Path("data/variants.jsonl"),
-        docs_dir=Path("data/documents"),
-        audit_claims_path=Path("data/audit_claims.jsonl"),
-    )
-    assert len(b_ok) == 50 and len(v_ok) == 100 and len(d_ok) == 8
+    # When canonical data/variants.jsonl contains draft variants, verify_all_records_before_run and execute_verified_evaluation must refuse
+    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
+        verify_all_records_before_run(
+            base_cases_path=Path("data/base_cases.jsonl"),
+            variants_path=Path("data/variants.jsonl"),
+            docs_dir=Path("data/documents"),
+            audit_claims_path=Path("data/audit_claims.jsonl"),
+        )
 
-    # When any variant is in draft status, verify_all_records_before_run and execute_verified_evaluation must refuse
-    temp_draft_variants_path = tmp_path / "draft_variants.jsonl"
-    temp_draft_variants_path.write_text(
+    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
+        execute_verified_evaluation(
+            base_cases_path=Path("data/base_cases.jsonl"),
+            variants_path=Path("data/variants.jsonl"),
+            docs_dir=Path("data/documents"),
+        )
+
+    # When all 100 variants are verified (mocked), verify_all_records_before_run succeeds
+    temp_verified_variants_path = tmp_path / "all_verified_variants.jsonl"
+    temp_verified_variants_path.write_text(
         "\n".join(
             json.dumps(
                 {
                     **v.model_dump(),
-                    "status": "draft",
-                    "verified_by": None,
-                    "verified_on": None,
+                    "status": "verified",
+                    "verified_by": "mock_verifier",
+                    "verified_on": "2026-10-13",
                 }
             )
             for v in variants
@@ -443,20 +457,13 @@ def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-
-    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
-        verify_all_records_before_run(
-            base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=temp_draft_variants_path,
-            docs_dir=Path("data/documents"),
-        )
-
-    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
-        execute_verified_evaluation(
-            base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=temp_draft_variants_path,
-            docs_dir=Path("data/documents"),
-        )
+    b_ok, v_ok, d_ok = verify_all_records_before_run(
+        base_cases_path=Path("data/base_cases.jsonl"),
+        variants_path=temp_verified_variants_path,
+        docs_dir=Path("data/documents"),
+        audit_claims_path=Path("data/audit_claims.jsonl"),
+    )
+    assert len(b_ok) == 50 and len(v_ok) == 100 and len(d_ok) == 8
 
     # And if any audit claim still has needs_human_review=True, verify_all_records_before_run must refuse
     audit_lines = [
@@ -473,7 +480,7 @@ def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
     with pytest.raises(DatasetValidationError, match="needs_human_review is True"):
         verify_all_records_before_run(
             base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=Path("data/variants.jsonl"),
+            variants_path=temp_verified_variants_path,
             docs_dir=Path("data/documents"),
             audit_claims_path=temp_flagged_audit_path,
         )

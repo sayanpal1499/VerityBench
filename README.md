@@ -84,7 +84,7 @@ VerityBench enforces a hard verification gate ([`verify_all_records_before_run`]
 | [`data/base_cases.jsonl`](data/base_cases.jsonl) | `50` cases | **Verified (`50/50`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-12"` | `38` answerable (`number_with_unit`, `named_entity`, `date`, `yes_no`, `list`, `two_sentence_fact`) + `12` unanswerable (`should_abstain=True`). |
 | [`data/regression_cases.jsonl`](data/regression_cases.jsonl) | `40` cases | **Inherited from Verified Base Cases (`40/40`)** | `status="inherited_from_base_case"`, `verification_source="inherited_from_base_case"`, `baseline_source="canonical_base_case_seed"`, `verified_by=null`, `verified_on=null`, `source_base_verified_by="sayanpal1499"`, `source_base_verified_on="2026-10-12"` | Canonical regression seed (`BASE-001`–`BASE-040`: `32` answerable + `8` unanswerable across `DOC-001`–`DOC-008`), inheriting ground truth directly from `data/base_cases.jsonl` (not independently human-reviewed a second time or frozen from a live evaluation run), validated via `validate_regression_cases()`. |
 | [`data/audit_claims.jsonl`](data/audit_claims.jsonl) | `45` claims | **Verified (`45/45`)** | `verified_by="sayanpal1499"`, `verified_on="2026-10-13"` | Non-independent, in-sample rule-development audit set (`15 supported`, `15 contradicted`, `15 unsupported`; `0` `needs_human_review` flags remaining). |
-| [`data/variants.jsonl`](data/variants.jsonl) | `100` variants | **Draft (`100/100`)** | `status="draft"`, `verified_by=null`, `verified_on=null` | **Exact Live-Run Prerequisite:** `verify_all_records_before_run()` blocks `--run-all` until all `100` records have `status="verified"` with non-null `verified_by` and `verified_on`. `VAR-001`–`VAR-020` were reviewed in human batches 1–2, and all `100` variants (`VAR-001`–`VAR-100`) were systematically audited in one pass and consolidated in [`data/variants_final_review_checklist.md`](data/variants_final_review_checklist.md). |
+| [`data/variants.jsonl`](data/variants.jsonl) | `100` variants | **20 Verified, 80 Draft (`20/100 verified`)** | `VAR-001`–`VAR-020`: `status="verified"`, `verified_by="sayanpal1499"`, `verified_on="2026-10-13"`; `VAR-021`–`VAR-100`: `status="draft"`, `verified_by=null`, `verified_on=null` | **Exact Live-Run Prerequisite:** `verify_all_records_before_run()` strictly blocks live `--run-all` because `VAR-021`–`VAR-100` remain in `status="draft"` pending final human sign-off. `VAR-001`–`VAR-020` were human-reviewed and approved in Batches 1–2; `VAR-021`–`VAR-100` were audited and consolidated for sign-off in [`data/variants_final_review_checklist.md`](data/variants_final_review_checklist.md). |
 
 ---
 
@@ -134,7 +134,7 @@ All `66` unit and integration tests run completely offline using deterministic f
 # 1. Run the complete 66-test offline suite
 .\.venv\Scripts\python.exe -m pytest -v
 
-# 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 100 draft variants)
+# 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 20 verified + 80 draft variants)
 .\.venv\Scripts\python.exe -m evaluation.dataset --allow-draft --check-variants --check-audit-claims --check-regression-cases
 
 # 3. Validate only the 40-case canonical regression baseline seed
@@ -158,7 +158,7 @@ print(json.dumps({k: v for k, v in res.items() if k != 'evaluated_records'}, ind
 # 1. Run the complete 66-test offline suite
 ./.venv/bin/python -m pytest -v
 
-# 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 100 draft variants)
+# 2. Validate all datasets (50 verified base cases, 40 regression cases inheriting verified base-case ground truth, 45 verified audit claims, 20 verified + 80 draft variants)
 ./.venv/bin/python -m evaluation.dataset --allow-draft --check-variants --check-audit-claims --check-regression-cases
 
 # 3. Validate only the 40-case canonical regression baseline seed
@@ -240,6 +240,6 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
      - **`gemini/gemini-3.5-flash-lite` (Approved Fixed Independent Judge Model):** Verified available via live Gemini API request (`available: true`, `latency_ms=1831.32`, `response_json_schema=True`, `cached_replay_hit=True`).
      - **5 Live Smoke-Test Scenarios (`EX-1`–`EX-5`):** Executed live against `groq/openai/gpt-oss-20b` and cached in `.cache/llm_responses/` (`15` cached response files total).
 4. **Full 150-Nominal / 144-LLM-Eligible Live Benchmark (`grounded_v1` vs. `naive_v0` — Not Yet Run):**
-   - While live preflight API calls were executed in `RUN-00-PREFLIGHT`, the full 150-case evaluation (`50` base cases + `94` LLM-eligible variants + `6` pre-API `empty_malformed` variants) has **not** been run. Because the 100 variants in `data/variants.jsonl` have not all been individually human-verified (`VAR-001`–`VAR-020` reviewed in human batches 1–2; `VAR-021`–`VAR-100` audited and consolidated in [`data/variants_final_review_checklist.md`](data/variants_final_review_checklist.md)), they remain in `status: "draft"`, and `verify_all_records_before_run()` strictly blocks live evaluation until human sign-off is completed. No live model accuracy, hallucination rates, calibration metrics, or observed failure cluster counts are claimed prior to running the live evaluation.
+   - While live preflight API calls were executed in `RUN-00-PREFLIGHT`, the full 150-case evaluation (`50` base cases + `94` LLM-eligible variants + `6` pre-API `empty_malformed` variants) has **not** been run. Because the 100 variants in `data/variants.jsonl` have not all received human sign-off (`VAR-001`–`VAR-020` are human-verified in Batches 1–2; `VAR-021`–`VAR-100` remain in `status="draft"` pending final human sign-off), `verify_all_records_before_run()` strictly blocks live evaluation until human sign-off is completed across all 100 variants. No live model accuracy, hallucination rates, calibration metrics, or observed failure cluster counts are claimed prior to running the live evaluation.
 
 See [`reports/evaluation_report.md`](reports/evaluation_report.md) for the complete technical report, methodology, pre-run failure hypotheses, calibration equations, regression workflow, and the reserved 11th adversarial category (`multi_hop_conditional`).

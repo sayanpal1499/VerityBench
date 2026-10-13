@@ -1208,7 +1208,7 @@ def save_variants_jsonl_and_csv(
                 "PASS_AI_AUDIT",
                 _build_ai_review_note(v),
                 v.status,
-                "PENDING — AI review is not human sign-off",
+                f"VERIFIED by {v.verified_by} on {v.verified_on}" if v.status == "verified" else "PENDING — AI review is not human sign-off",
             ])
 
 
