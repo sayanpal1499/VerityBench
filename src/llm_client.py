@@ -40,6 +40,16 @@ SAFE_RATE_LIMITS: dict[str, dict[str, int]] = {
 class LLMClientError(Exception):
     """Raised when an LLM API call fails after all retries."""
 
+    def __init__(
+        self,
+        message: str,
+        retry_after_sec: Optional[float] = None,
+        rate_headers: Optional[dict[str, str]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.retry_after_sec = retry_after_sec
+        self.rate_headers = rate_headers or {}
+
 
 class _AdaptiveRateLimiter:
     """Tracks rolling 60-second request/token windows and live provider rate-limit headers."""
@@ -59,22 +69,34 @@ class _AdaptiveRateLimiter:
 
         # 1. Check live provider header feedback first
         headers = self.latest_headers.get(provider, {})
+        retry_after_sec = headers.get("retry_after_sec")
         rem_tokens = headers.get("remaining_tokens")
         reset_tokens_sec = headers.get("reset_tokens_sec", 0.0)
         rem_reqs = headers.get("remaining_requests")
         reset_reqs_sec = headers.get("reset_requests_sec", 0.0)
+
+        # Respect explicit retry-after if set
+        if retry_after_sec is not None and retry_after_sec > 0:
+            sleep_s = min(retry_after_sec + random.uniform(0.15, 0.35), 65.0)
+            time.sleep(sleep_s)
+            total_slept += sleep_s
+            self.latest_headers[provider]["retry_after_sec"] = None
+            self.history[provider].clear()
 
         if rem_tokens is not None and rem_tokens < int(estimated_tokens * 1.15):
             sleep_s = max(0.5, min(reset_tokens_sec, 65.0)) + random.uniform(0.15, 0.35)
             time.sleep(sleep_s)
             total_slept += sleep_s
             self.latest_headers[provider]["remaining_tokens"] = None
+            self.latest_headers[provider]["reset_tokens_sec"] = None
+            self.history[provider].clear()
 
         if rem_reqs is not None and rem_reqs <= 1:
             sleep_s = max(0.5, min(reset_reqs_sec, 65.0)) + random.uniform(0.15, 0.35)
             time.sleep(sleep_s)
             total_slept += sleep_s
             self.latest_headers[provider]["remaining_requests"] = None
+            self.latest_headers[provider]["reset_requests_sec"] = None
 
         # 2. Check rolling 60-second sliding window
         while True:
@@ -102,6 +124,11 @@ class _AdaptiveRateLimiter:
         if raw_headers:
             parsed: dict[str, Any] = {}
             lower_map = {k.lower(): v for k, v in raw_headers.items()}
+            if "retry-after" in lower_map:
+                try:
+                    parsed["retry_after_sec"] = float(lower_map["retry-after"])
+                except ValueError:
+                    parsed["retry_after_sec"] = _parse_duration_seconds(lower_map["retry-after"])
             if "x-ratelimit-remaining-tokens" in lower_map:
                 try:
                     parsed["remaining_tokens"] = int(lower_map["x-ratelimit-remaining-tokens"])
@@ -177,6 +204,22 @@ def _parse_duration_seconds(value: str) -> float:
         elif unit == "ms":
             total += num / 1000.0
     return total
+
+
+def _extract_retry_after_seconds(text: str) -> Optional[float]:
+    """Extract explicit wait duration from rate-limit error messages if present."""
+    if not text:
+        return None
+    # Matches e.g. "try again in 11.685s", "retry after 12s", "wait 500ms", "retry in 1m30s"
+    m = re.search(
+        r"(?:try again in|retry after|wait|retry in)\s+((?:\d+(?:\.\d+)?(?:ms|h|m|s)?\s*)+)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        val = _parse_duration_seconds(m.group(1).strip())
+        return val if val > 0 else None
+    return None
 
 
 def _sanitize_secrets(text: str) -> str:
@@ -369,7 +412,14 @@ def call_llm(
             )
             if attempt < max_retries and is_retryable:
                 retry_count += 1
-                backoff_s = min(60.0, (4.0 * (2.0 ** (attempt))) + random.uniform(0.5, 2.0))
+                explicit_retry = getattr(exc, "retry_after_sec", None)
+                if explicit_retry is None or explicit_retry <= 0:
+                    explicit_retry = _extract_retry_after_seconds(last_error_msg)
+
+                if explicit_retry is not None and explicit_retry > 0:
+                    backoff_s = min(65.0, explicit_retry + random.uniform(0.15, 0.40))
+                else:
+                    backoff_s = min(60.0, (4.0 * (2.0 ** (attempt))) + random.uniform(0.5, 2.0))
                 time.sleep(backoff_s)
                 continue
             break
@@ -435,10 +485,26 @@ def _call_groq_api(
     }
 
     if response.status_code != 200:
+        retry_after_val: Optional[float] = None
+        if "retry-after" in rate_headers:
+            try:
+                retry_after_val = float(rate_headers["retry-after"])
+            except ValueError:
+                retry_after_val = _parse_duration_seconds(rate_headers["retry-after"])
+        if retry_after_val is None or retry_after_val <= 0:
+            if "x-ratelimit-reset-tokens" in rate_headers:
+                retry_after_val = _parse_duration_seconds(rate_headers["x-ratelimit-reset-tokens"])
+            elif "x-ratelimit-reset-requests" in rate_headers:
+                retry_after_val = _parse_duration_seconds(rate_headers["x-ratelimit-reset-requests"])
+        if retry_after_val is None or retry_after_val <= 0:
+            retry_after_val = _extract_retry_after_seconds(response.text)
+
         if response.status_code == 429:
             _RATE_LIMITER.record_call("groq", 0, raw_headers=raw_headers)
         raise LLMClientError(
-            f"Groq HTTP {response.status_code}: {_sanitize_secrets(response.text[:500])}"
+            f"Groq HTTP {response.status_code}: {_sanitize_secrets(response.text[:500])}",
+            retry_after_sec=retry_after_val,
+            rate_headers=rate_headers,
         )
 
     data = response.json()

@@ -10,6 +10,7 @@ import pytest
 
 from evaluation.dataset import DatasetValidationError, load_jsonl_variants
 from evaluation.regression import (
+    execute_regression_and_noise_floor_pipeline,
     freeze_regression_baseline,
     load_regression_cases,
     run_noise_floor_experiment,
@@ -177,6 +178,153 @@ def test_noise_floor_experiment_flags_flaky_cases(tmp_path: Path) -> None:
     assert noise_report["stable_ids"] == ["BASE-001"]
 
 
+def test_noise_floor_incremental_checkpoint_and_resume(tmp_path: Path) -> None:
+    cases_by_id, docs = _sample_cases_and_docs()
+    scored_records = [
+        {"case_id": "BASE-001", "category": "base", "is_correct": True, "abstained": False, "confidence": 0.95},
+        {"case_id": "BASE-002", "category": "base", "is_correct": True, "abstained": False, "confidence": 0.92},
+    ]
+    frozen = freeze_regression_baseline(
+        scored_records=scored_records,
+        cases_by_id=cases_by_id,
+        documents=docs,
+        output_path=tmp_path / "reg.jsonl",
+    )
+
+    cp_file = tmp_path / "checkpoint.json"
+    call_counts: dict[str, int] = {"BASE-001": 0, "BASE-002": 0}
+
+    # Worker 1: completes BASE-001 (all 3 runs) and BASE-002 run 1, then crashes on BASE-002 run 2
+    def mock_runner_crash(
+        document: str,
+        question: str,
+        prompt_version: str = "grounded_v1",
+        model: str = "groq/openai/gpt-oss-20b",
+        bypass_cache: bool = False,
+        seed: int = 42,
+    ) -> QAOutput:
+        if "continuous supply current" in question:
+            call_counts["BASE-001"] += 1
+            return QAOutput(
+                answer="42 mA",
+                evidence=["The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."],
+                confidence=0.95,
+                abstained=False,
+            )
+        call_counts["BASE-002"] += 1
+        if call_counts["BASE-002"] == 1:
+            return QAOutput(
+                answer="118 °C",
+                evidence=["Its thermal shutdown threshold is 118 °C."],
+                confidence=0.92,
+                abstained=False,
+            )
+        # Crash on 2nd run of BASE-002!
+        raise KeyboardInterrupt("Simulated interruption during worker execution")
+
+    with pytest.raises(KeyboardInterrupt):
+        run_noise_floor_experiment(
+            regression_cases=frozen,
+            num_runs=3,
+            qa_runner_fn=mock_runner_crash,
+            checkpoint_path=cp_file,
+        )
+
+    # Verify checkpoint exists and captured intermediate progress
+    assert cp_file.exists()
+    cp_data = json.loads(cp_file.read_text(encoding="utf-8"))
+    assert "BASE-001" in cp_data["cases_by_id"]
+    assert len(cp_data["cases_by_id"]["BASE-001"]["runs"]) == 3
+    assert "BASE-002" in cp_data["cases_by_id"]
+    assert len(cp_data["cases_by_id"]["BASE-002"]["runs"]) == 1
+
+    # Worker 2: resumes using the same checkpoint
+    resumed_counts: dict[str, int] = {"BASE-001": 0, "BASE-002": 0}
+
+    def mock_runner_resume(
+        document: str,
+        question: str,
+        prompt_version: str = "grounded_v1",
+        model: str = "groq/openai/gpt-oss-20b",
+        bypass_cache: bool = False,
+        seed: int = 42,
+    ) -> QAOutput:
+        if "continuous supply current" in question:
+            resumed_counts["BASE-001"] += 1
+            return QAOutput(
+                answer="42 mA",
+                evidence=["The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."],
+                confidence=0.95,
+                abstained=False,
+            )
+        resumed_counts["BASE-002"] += 1
+        return QAOutput(
+            answer="118 °C",
+            evidence=["Its thermal shutdown threshold is 118 °C."],
+            confidence=0.92,
+            abstained=False,
+        )
+
+    noise_report = run_noise_floor_experiment(
+        regression_cases=frozen,
+        num_runs=3,
+        qa_runner_fn=mock_runner_resume,
+        checkpoint_path=cp_file,
+    )
+
+    # BASE-001 was already 3/3, so 0 calls on resume!
+    assert resumed_counts["BASE-001"] == 0
+    # BASE-002 had 1/3 done, so exactly 2 calls executed on resume!
+    assert resumed_counts["BASE-002"] == 2
+
+    # Verify no double-counting and correct aggregates
+    assert noise_report["total_frozen_cases"] == 2
+    assert len(noise_report["cases"][0]["runs"]) == 3
+    assert len(noise_report["cases"][1]["runs"]) == 3
+    assert noise_report["stable_count"] == 2
+    assert noise_report["flaky_count"] == 0
+    assert noise_report["per_run_accuracy"] == [1.0, 1.0, 1.0]
+
+
+def test_execute_regression_pipeline_wires_checkpoint(tmp_path: Path) -> None:
+    cases_by_id, docs = _sample_cases_and_docs()
+    scored_records = [
+        {"case_id": "BASE-001", "category": "base", "is_correct": True, "abstained": False, "confidence": 0.95},
+    ]
+    reg_file = tmp_path / "reg.jsonl"
+    frozen = freeze_regression_baseline(
+        scored_records=scored_records,
+        cases_by_id=cases_by_id,
+        documents=docs,
+        output_path=reg_file,
+    )
+    res_dir = tmp_path / "results"
+    cp_file = res_dir / "custom_checkpoint.json"
+
+    def mock_qa(document: str, question: str, **kwargs) -> QAOutput:
+        return QAOutput(
+            answer="42 mA",
+            evidence=["The Helios-X9 Optical Transceiver operates at a continuous supply current of 42 mA under nominal load."],
+            confidence=0.95,
+            abstained=False,
+        )
+
+    pipeline_out = execute_regression_and_noise_floor_pipeline(
+        regression_cases_path=reg_file,
+        results_dir=res_dir,
+        num_noise_runs=2,
+        bad_subset_size=1,
+        qa_runner_fn=mock_qa,
+        checkpoint_path=cp_file,
+    )
+    assert cp_file.exists()
+    assert (res_dir / "regression_noise_floor.json").exists()
+    assert (res_dir / "regression_grounded_v2.json").exists()
+    assert (res_dir / "regression_planted_bad.json").exists()
+    assert (res_dir / "regression_report.json").exists()
+    assert "noise_floor" in pipeline_out
+
+
 def test_prompt_regression_comparison_and_planted_bad_detector() -> None:
     cases_by_id, docs = _sample_cases_and_docs()
     test_cases = []
@@ -262,37 +410,32 @@ def test_prompt_regression_comparison_and_planted_bad_detector() -> None:
 
 
 def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
-    """Verify the strict evaluation runner refuses to run while variants are draft or audit claims have needs_human_review=True."""
+    """Verify the strict evaluation runner accepts verified variants and refuses to run when any variant is draft or any audit claim has needs_human_review=True."""
     variants = load_jsonl_variants(Path("data/variants.jsonl"))
     assert len(variants) == 100
-    assert all(v.status == "draft" for v in variants), (
-        "All 100 variants in data/variants.jsonl must remain status='draft' until human approval."
+    assert all(
+        v.status == "verified" and v.verified_by == "sayanpal1499" and v.verified_on == "2026-10-13"
+        for v in variants
     )
 
-    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
-        verify_all_records_before_run(
-            base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=Path("data/variants.jsonl"),
-            docs_dir=Path("data/documents"),
-        )
+    b_ok, v_ok, d_ok = verify_all_records_before_run(
+        base_cases_path=Path("data/base_cases.jsonl"),
+        variants_path=Path("data/variants.jsonl"),
+        docs_dir=Path("data/documents"),
+        audit_claims_path=Path("data/audit_claims.jsonl"),
+    )
+    assert len(b_ok) == 50 and len(v_ok) == 100 and len(d_ok) == 8
 
-    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
-        execute_verified_evaluation(
-            base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=Path("data/variants.jsonl"),
-            docs_dir=Path("data/documents"),
-        )
-
-    # When variants are verified in a temporary copy, canonical audit_claims.jsonl (45 verified, 0 flagged) passes
-    temp_variants_path = tmp_path / "verified_variants.jsonl"
-    temp_variants_path.write_text(
+    # When any variant is in draft status, verify_all_records_before_run and execute_verified_evaluation must refuse
+    temp_draft_variants_path = tmp_path / "draft_variants.jsonl"
+    temp_draft_variants_path.write_text(
         "\n".join(
             json.dumps(
                 {
                     **v.model_dump(),
-                    "status": "verified",
-                    "verified_by": "unit_test_verifier",
-                    "verified_on": "2026-10-13",
+                    "status": "draft",
+                    "verified_by": None,
+                    "verified_on": None,
                 }
             )
             for v in variants
@@ -300,13 +443,20 @@ def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    b_ok, v_ok, d_ok = verify_all_records_before_run(
-        base_cases_path=Path("data/base_cases.jsonl"),
-        variants_path=temp_variants_path,
-        docs_dir=Path("data/documents"),
-        audit_claims_path=Path("data/audit_claims.jsonl"),
-    )
-    assert len(b_ok) == 50 and len(v_ok) == 100 and len(d_ok) == 8
+
+    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
+        verify_all_records_before_run(
+            base_cases_path=Path("data/base_cases.jsonl"),
+            variants_path=temp_draft_variants_path,
+            docs_dir=Path("data/documents"),
+        )
+
+    with pytest.raises(DatasetValidationError, match="runner requires status == 'verified'"):
+        execute_verified_evaluation(
+            base_cases_path=Path("data/base_cases.jsonl"),
+            variants_path=temp_draft_variants_path,
+            docs_dir=Path("data/documents"),
+        )
 
     # And if any audit claim still has needs_human_review=True, verify_all_records_before_run must refuse
     audit_lines = [
@@ -323,7 +473,7 @@ def test_runner_strictly_refuses_draft_variants(tmp_path: Path) -> None:
     with pytest.raises(DatasetValidationError, match="needs_human_review is True"):
         verify_all_records_before_run(
             base_cases_path=Path("data/base_cases.jsonl"),
-            variants_path=temp_variants_path,
+            variants_path=Path("data/variants.jsonl"),
             docs_dir=Path("data/documents"),
             audit_claims_path=temp_flagged_audit_path,
         )

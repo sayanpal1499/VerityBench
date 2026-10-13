@@ -1,0 +1,68 @@
+{
+  "FABRICATED_CONTENT": {
+    "cluster_label": "FABRICATED_CONTENT",
+    "probes_executed": 3,
+    "probes": [
+      {
+        "case_id": "BASE-002",
+        "probe_type": "clean_base_case_control_probe",
+        "original_failed_answer": "Dr. Maren Lindqvist",
+        "probe_answer": "Dr. Maren Lindqvist",
+        "probe_abstained": false,
+        "expected_answer": "Dr. Maren Lindqvist",
+        "finding": "Model succeeded on the clean base case control, isolating the failure to the 'base' transformation."
+      },
+      {
+        "case_id": "BASE-021",
+        "probe_type": "clean_base_case_control_probe",
+        "original_failed_answer": "The Enterprise Clearing Tier has a rate limit of 900 requests per minute (RPM) and a burst ceiling of 150 concurrent requests.",
+        "probe_answer": "The Enterprise Clearing Tier has a rate limit of 900 requests per minute (RPM) and a burst ceiling of 150 concurrent requests.",
+        "probe_abstained": false,
+        "expected_answer": "900 requests per minute (RPM) and a burst ceiling of 150 concurrent requests",
+        "finding": "Model succeeded on the clean base case control, isolating the failure to the 'base' transformation."
+      },
+      {
+        "case_id": "BASE-030",
+        "probe_type": "clean_base_case_control_probe",
+        "original_failed_answer": "The cure period for a material breach for non-payment is 45 calendar days, whereas for a non-financial operational breach it is 60 calendar days.",
+        "probe_answer": "The cure period for a material breach for non-payment is 45 calendar days, whereas for a non-financial operational breach it is 60 calendar days.",
+        "probe_abstained": false,
+        "expected_answer": "A material breach for non-payment has a cure period of 45 calendar days after receiving written notice of default, whereas a non-financial operational breach has a cure period of 60 calendar days.",
+        "finding": "Model succeeded on the clean base case control, isolating the failure to the 'base' transformation."
+      }
+    ]
+  },
+  "OVER_ABSTENTION": {
+    "cluster_label": "OVER_ABSTENTION",
+    "probes_executed": 3,
+    "probes": [
+      {
+        "case_id": "BASE-005",
+        "probe_type": "gate_trace_and_canonical_question_probe",
+        "gate_triggered_on_failure": false,
+        "pre_gate_raw_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 0 retries: Groq HTTP 400: {\"error\":{\"message\":\"Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details.\",\"type\":\"invalid_request_error\",\"code\":\"json_validate_failed\",\"failed_generation\":\"max completion tokens reached before generating a valid document\"}}\n",
+        "canonical_base_probe_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 4 retries: Groq HTTP 400: {\"error\":{\"message\":\"Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details.\",\"type\":\"invalid_request_error\",\"code\":\"json_validate_failed\",\"failed_generation\":\"max completion tokens reached before generating a valid document\"}}\n",
+        "canonical_base_probe_abstained": true,
+        "finding": "Model voluntarily abstained due to surface/lexical mismatch between question and source."
+      },
+      {
+        "case_id": "BASE-018",
+        "probe_type": "gate_trace_and_canonical_question_probe",
+        "gate_triggered_on_failure": false,
+        "pre_gate_raw_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 0 retries: Groq HTTP 400: {\"error\":{\"message\":\"Failed to validate JSON. Please adjust your prompt. See 'failed_generation' for more details.\",\"type\":\"invalid_request_error\",\"code\":\"json_validate_failed\",\"failed_generation\":\"\"}}\n",
+        "canonical_base_probe_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 4 retries: Groq HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01kj2q7v5yeffahywdbnv4qq5j` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199782, Requested 1484. Please try again in 9m6.911999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}\n",
+        "canonical_base_probe_abstained": true,
+        "finding": "Model voluntarily abstained due to surface/lexical mismatch between question and source."
+      },
+      {
+        "case_id": "BASE-040",
+        "probe_type": "gate_trace_and_canonical_question_probe",
+        "gate_triggered_on_failure": false,
+        "pre_gate_raw_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 0 retries: Groq HTTP 400: {\"error\":{\"message\":\"Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details.\",\"type\":\"invalid_request_error\",\"code\":\"json_validate_failed\",\"failed_generation\":\"max completion tokens reached before generating a valid document\"}}\n",
+        "canonical_base_probe_answer": "System Error Abstention: API failure: LLM call failed for groq/openai/gpt-oss-20b after 4 retries: Groq HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01kj2q7v5yeffahywdbnv4qq5j` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199625, Requested 1520. Please try again in 8m14.64s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}\n",
+        "canonical_base_probe_abstained": true,
+        "finding": "Model voluntarily abstained due to surface/lexical mismatch between question and source."
+      }
+    ]
+  }
+}

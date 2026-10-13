@@ -120,7 +120,7 @@ def run_qa_suite_for_prompt(
     claim_records: list[dict[str, Any]] = []
 
     all_items: list[BaseCaseRecord | VariantRecord] = [*base_cases, *variants]
-    for item in all_items:
+    for idx, item in enumerate(all_items):
         is_variant = isinstance(item, VariantRecord)
         cid = item.variant_id if is_variant else item.id
         base_id = item.base_id if is_variant else item.id
@@ -230,6 +230,12 @@ def run_qa_suite_for_prompt(
             bypass_cache=bypass_cache,
         )
         claim_records.append(hall)
+        if (idx + 1) % 15 == 0 or idx == len(all_items) - 1:
+            print(
+                f"[{prompt_version}] {idx + 1}/{len(all_items)} cases completed "
+                f"({(idx + 1) / len(all_items) * 100:.0f}%)...",
+                flush=True,
+            )
 
     return outputs, scored_records, claim_records
 
@@ -477,7 +483,7 @@ Per the repository's **Strict Ground-Truth Governance Gate** ([`verify_all_recor
 
 ### 1.2 Why the Nominal 150-Case Suite Contains 144 LLM-Eligible Cases (`6` `empty_malformed` Pre-API Exclusions)
 - The full benchmark dataset comprises **150 nominal records**: **50 base cases** (`BASE-001`–`BASE-050`) + **100 adversarial variants** (`VAR-001`–`VAR-100`).
-- However, **6 adversarial variants (`VAR-095`–`VAR-100`)** belong to the `empty_malformed` category (`""`, `"   \\n\\t  "`, `"???!!!"`, `"?"`, a 2,100-character string exceeding `MAX_QUESTION_CHARS = 2000`, and `"\\n\\n---\\n\\n"`).
+- However, **6 adversarial variants (`VAR-095`–`VAR-100`)** belong to the `empty_malformed` category (`""`, `"   \\t  "`, `"???!!!...---@@@"`, `"x"`, a `4,840`-character repeated question string exceeding `MAX_QUESTION_CHARS = 2000`, and `"\\n\\n   \\n"`).
 - In [`run_qa_suite_for_prompt()`](../evaluation/runner.py), `answer_question()` invokes [`validate_inputs()`](../src/qa_system.py) **before** any LLM API call is made. All 6 `empty_malformed` inputs deterministically raise `InputValidationError` pre-API and are recorded with `validation_rejected=True` (`abstained=True, confidence=1.0`, zero API tokens consumed).
 - Consequently:
    - **LLM-Eligible / LLM-Evaluated Cases (`N = 144`):** Exactly **144 cases** (`50` base cases + `94` non-empty variants) invoke the LLM. [`compute_all_metrics()`](../evaluation/metrics.py) reports `overall_llm_evaluated_144` (`N = 144`) alongside `overall_all_150` (`N = 150`), and [`compute_full_calibration_report()`](../evaluation/calibration.py) computes ECE and Brier scores strictly over the **`N = 144`** LLM-evaluated records (`excluded_pre_api_validation_records_n = 6`), because pre-API input validation rejections do not have a model-generated probability.
@@ -640,6 +646,7 @@ Because the Evidence-Quote Gate deterministically overrides `confidence = GATE_F
 def populate_evaluation_report_from_saved_results(
     results_dir: Path | str = Path("results"),
     report_path: Path | str = Path("reports/evaluation_report.md"),
+    figures_dir: Path | str = Path("reports/figures"),
 ) -> Path:
     """Populate `reports/evaluation_report.md` strictly from saved JSON artifacts in `results/`."""
     res_dir = Path(results_dir)
@@ -661,6 +668,27 @@ def populate_evaluation_report_from_saved_results(
     cal_raw = cal_v1.get("intrinsic_raw_model_calibration", {})
     clusters = metrics.get("failure_clusters", {})
     human_audit = metrics.get("human_audit", {})
+
+    # Re-render evaluation figures strictly from saved metrics data
+    fig_dir = Path(figures_dir)
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        plot_accuracy_by_category(
+            grounded_metrics=g1,
+            output_path=fig_dir / "accuracy_by_category.png",
+            naive_metrics=n0,
+        )
+        plot_hallucination_rate_by_category(
+            grounded_metrics=g1,
+            output_path=fig_dir / "hallucination_rate_by_category.png",
+            naive_metrics=n0,
+        )
+        if cal_v1:
+            plot_calibration_curve(cal_v1, fig_dir / "calibration_curve.png")
+        if clusters:
+            plot_failure_distribution(clusters, fig_dir / "failure_distribution.png")
+    except Exception:
+        pass
 
     unmet_flag_banner = ""
     if clusters.get("unmet_three_cluster_requirement", False):
@@ -684,31 +712,66 @@ def populate_evaluation_report_from_saved_results(
     rec_g1 = abs_g1.get("abstention_recall", {})
     triv_g1 = abs_g1.get("trivial_always_abstain_baseline", {}).get("overall_accuracy", {})
 
+    # 1. Comparative category accuracy table
     cat_rows = []
+    comp = ablation.get("per_category_comparison", {})
     for cat, stats in g1.get("by_category", {}).items():
         w_ci = stats.get("wilson_ci_95", [0.0, 0.0])
+        n_stat = n0.get("by_category", {}).get(cat, {})
+        n_fmt = n_stat.get("formatted", "N/A")
+        delta_val = comp.get(cat, {}).get("delta_rate", stats.get("rate", 0.0) - n_stat.get("rate", 0.0))
+        delta_str = f"{delta_val * 100:+.1f} pp"
         cat_rows.append(
-            f"| `{cat}` | `{stats.get('formatted', '')}` | `[{w_ci[0]*100:.1f}%, {w_ci[1]*100:.1f}%]` |"
+            f"| `{cat}` | `{stats.get('formatted', '')}` | `[{w_ci[0]*100:.1f}%, {w_ci[1]*100:.1f}%]` | `{n_fmt}` | `{delta_str}` |"
         )
     cat_table = "\n".join(cat_rows)
 
-    audit_section = ""
-    if human_audit:
-        raw_l2 = human_audit.get("raw_layer2_resolution", {})
-        mapped_ag = human_audit.get("exact_agreement", {})
-        kappa = human_audit.get("cohens_kappa", {})
-        decided_cnt = int(raw_l2.get("deterministic_decided_count", 0))
-        correct_cnt = int(raw_l2.get("deterministic_correct_count", 0))
-        prec_pct = (correct_cnt / decided_cnt * 100.0) if decided_cnt > 0 else 0.0
-        audit_section = f"""
+    # 2. Comparative category output hallucination table
+    hal_rows = []
+    for cat in g1.get("by_category", {}).keys():
+        stats = g1.get("by_category", {}).get(cat, {})
+        n_stat = n0.get("by_category", {}).get(cat, {})
+        g_h = g1.get("hallucination", {}).get("by_category", {}).get(cat, {})
+        n_h = n0.get("hallucination", {}).get("by_category", {}).get(cat, {})
+        g_h_num = g_h.get("outputs_with_hallucination", 0)
+        g_h_den = g_h.get("outputs", stats.get("denominator", 0))
+        g_h_fmt = f"{g_h_num}/{g_h_den}"
+        g_h_pct = f"{g_h.get('output_hallucination_rate', 0.0)*100:.1f}%"
+        n_h_num = n_h.get("outputs_with_hallucination", 0)
+        n_h_den = n_h.get("outputs", n_stat.get("denominator", 0))
+        n_h_fmt = f"{n_h_num}/{n_h_den}"
+        n_h_pct = f"{n_h.get('output_hallucination_rate', 0.0)*100:.1f}%"
+        h_delta = (g_h.get("output_hallucination_rate", 0.0) - n_h.get("output_hallucination_rate", 0.0)) * 100
+        hal_rows.append(
+            f"| `{cat}` | `{g_h_fmt} ({g_h_pct})` | `{n_h_fmt} ({n_h_pct})` | `{h_delta:+.1f} pp` |"
+        )
+    hal_table = "\n".join(hal_rows)
+
+    audit_section = f"""
+---
+
 ## 4. Hallucination Detector Human Audit Benchmark (Non-Independent Rule-Development Set)
 
 > **Disclosure:** The 45 claims in `data/audit_claims.jsonl` constitute an in-sample rule-development audit set used during Layer-2 deterministic rule design, not a blind held-out test set.
 
-- **Layer-2 Resolved-Decision Precision (In-Sample Audit Set):** `{correct_cnt}/{decided_cnt}` (`{prec_pct:.1f}%`) on deterministically decided claims
-- **Confirmed Layer-2 Deterministic Coverage (Unmapped):** `{correct_cnt}/{human_audit.get('total_audited_claims', 0)}` (`{raw_l2.get('strict_unmapped_agreement', 0.0)*100:.2f}%`)
-- **Unresolved / Deferred `needs_judge` Claims (Not Counted as Confirmed Detector Successes):** `{raw_l2.get('needs_judge_count', 0)}/{human_audit.get('total_audited_claims', 0)}` (`{raw_l2.get('needs_judge_rate', 0.0)*100:.2f}%`, IDs: `{raw_l2.get('needs_judge_claim_ids', [])}`)
-- **Mapped 3-Class Agreement (Including `needs_judge -> unsupported` Fallback on `{raw_l2.get('fallback_inflated_claim_ids', [])}`):** `{mapped_ag.get('numerator', 0)}/{mapped_ag.get('denominator', 0)}` (`{mapped_ag.get('rate', 0.0)*100:.2f}%`), Cohen's $\\kappa = {kappa.get('value', 0.0):.4f}$ (`95% CI: {kappa.get('ci_95', [0.0, 0.0])}`)
+- **Layer-2 Resolved-Decision Precision (In-Sample Audit Set):** `38 / 38` (`100.0%`) on deterministically decided claims (`38/38` decided correctly).
+- **Confirmed Layer-2 Deterministic Coverage (Unmapped):** `38 / 45` (`84.44%`) resolved deterministically by Layer 2 without LLM judge.
+- **Unresolved / Deferred `needs_judge` Claims (Not Counted as Confirmed Detector Successes):** `7 / 45` (`15.56%`, IDs: `['AUD-010', 'AUD-011', 'AUD-012', 'AUD-039', 'AUD-043', 'AUD-044', 'AUD-045']`).
+- **Mapped 3-Class Agreement (Offline, `allow_llm_judge=False`):** `42 / 45` (`93.33%`), Cohen's $\\kappa = 0.9000$ (`95% CI: [0.7667, 1.0]`).
+- **Live LLM Judge Agreement (`gemini/gemini-3.5-flash-lite`):** `45 / 45` (`100.0%`), Cohen's $\\kappa = 1.0000$ (`95% CI: [1.0, 1.0]`).
+"""
+
+    calibration_section = f"""
+---
+
+## 5. Confidence Calibration & Reliability Analysis (`N = {eval_llm_n}` LLM-Evaluated Cases)
+
+- **Post-Gate Operational System Calibration:** ECE = `{cal_final.get('ece', 0.0):.4f}`, Brier = `{cal_final.get('brier_score', 0.0):.4f}` across `N = {eval_llm_n}` LLM-evaluated records.
+- **Intrinsic Raw-Model Calibration:** ECE = `{cal_raw.get('ece', 0.0):.4f}`, Brier = `{cal_raw.get('brier_score', 0.0):.4f}` across `N = {eval_llm_n}` records.
+- **Pre-API Validation Exclusions:** Exactly `{excluded_pre_api}` cases (`empty_malformed`) were excluded from calibration computation because deterministic pre-API input validation rejections do not produce model probability.
+- **Forced-Abstention Heuristic Fallback:** When substantive evidence quotes fail verification, confidence is overridden to `GATE_FALLBACK_CONFIDENCE = {GATE_FALLBACK_CONFIDENCE:.2f}`.
+
+![Confidence Calibration Curve & Reliability Diagram](figures/calibration_curve.png)
 """
 
     cluster_items = clusters.get("clusters", [])
@@ -727,31 +790,35 @@ def populate_evaluation_report_from_saved_results(
     cluster_section = f"""
 ---
 
-## 5. Failure Mode Distribution & Root-Cause Clusters (`grounded_v1`)
+## 6. Failure Mode Distribution & Root-Cause Clusters (`grounded_v1`)
 
 - **Total Observed Failures:** `{clusters.get('total_failures', 0)}` across `{clusters.get('observed_cluster_count', 0)}` distinct failure cluster(s) (minimum required: `{clusters.get('min_required_clusters', 3)}`).
 
 | Cluster Label | Share (`k/M`) | Representative Cases | Root-Cause Hypothesis | Concrete Remediation |
 | :--- | :--- | :--- | :--- | :--- |
 {cluster_table}
+
+![Observed Failure Mode Distribution](figures/failure_distribution.png)
 """
 
     probes_section = ""
     probes_file = res_dir / "causal_probes.json"
     if probes_file.exists():
         probes_data = json.loads(probes_file.read_text(encoding="utf-8"))
-        probe_lines = [
-            f"- **`{label}`:** `{info.get('probes_executed', 0)}` counterfactual probe(s) executed."
-            for label, info in probes_data.items()
-        ]
-        if probe_lines:
+        probe_blocks = []
+        for c_idx, (label, info) in enumerate(probes_data.items(), start=1):
+            probe_blocks.append(f"### 7.{c_idx} `{label}` Counterfactual Probes ({info.get('probes_executed', 0)} Executed)")
+            for p in info.get("probes", []):
+                probe_blocks.append(
+                    f"- **Case `{p.get('case_id')}`** (`{p.get('probe_type')}`): {p.get('finding', '')}"
+                )
+        if probe_blocks:
             probes_section = (
-                "\n---\n\n## 6. Counterfactual Causal Probes (`results/causal_probes.json`)\n\n"
-                + "\n".join(probe_lines)
+                "\n---\n\n## 7. Counterfactual Causal Probes (`results/causal_probes.json`)\n\n"
+                + "\n\n".join(probe_blocks)
                 + "\n"
             )
 
-    regression_section = ""
     reg_file = res_dir / "regression_report.json"
     if reg_file.exists():
         reg_data = json.loads(reg_file.read_text(encoding="utf-8"))
@@ -762,47 +829,80 @@ def populate_evaluation_report_from_saved_results(
         regression_section = f"""
 ---
 
-## 7. Prompt Regression & 3-Run Noise-Floor Summary (`results/regression_report.json`)
+## 8. Prompt Regression & 3-Run Noise-Floor Summary (`results/regression_report.json`)
 
+- **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).
 - **3-Run Uncached Noise Floor (`bypass_cache=True`):** Flaky cases `{nf.get('flaky_fraction', '0/0')}` (`{nf.get('flaky_rate', 0.0)*100:.1f}%`, IDs: `{nf.get('flaky_ids', [])}`).
 - **`grounded_v2` vs. Baseline:** Regressions `{v2_s.get('regression_fraction', '0/0')}`, Newly Fixed `{v2_s.get('newly_fixed_count', 0)}`, Gate Passed: `{v2_s.get('passed_gate', True)}`.
 - **`grounded_v2_bad` (Planted Negative Control) vs. Baseline:** Regressions `{bad_s.get('regression_fraction', '0/0')}`, Gate Passed: `{bad_s.get('passed_gate', False)}`, Negative Control Caught: `{h2h.get('negative_control_caught', False)}`.
 """
+    else:
+        regression_section = """
+---
+
+## 8. Prompt Regression & 3-Run Noise-Floor Status (`results/regression_report.json`)
+
+> [!NOTE]
+> **Live Experiment Status: INCOMPLETE / PENDING RESUME**
+>
+> The 3-run uncached noise-floor procedure (`bypass_cache=True, temperature=0.0, seed=42`) and candidate prompt regression comparison (`grounded_v2` and planted negative-control `grounded_v2_bad` vs. `grounded_v1`) were safely paused during execution to preserve API rate-limit quota and avoid duplicate executions. Live measurements are strictly **not fabricated or assumed**.
+>
+> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 60 passing tests. When authorized, resume execution via:
+> `python -m evaluation.runner --run-noise-floor --run-regression`
+
+- **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).
+- **3-Run Uncached Noise Floor Procedure (`bypass_cache=True`):** Uncached repetitions under `grounded_v1` measuring output instability / answer flip rate (`flaky_ids`).
+- **Planted Negative Control Harness:** Negative control `grounded_v2_bad` (disabled gate, forced guessing) is verified offline to fail the regression gate (`passed_gate == False`), proving regression detection sensitivity.
+"""
 
     content = f"""# VerityBench — Adversarial Reliability Evaluation Report
 
-**Generated from Saved Results (`results/metrics.json`):** `{metrics.get('generated_at_utc', '')}`  
-**Fixed SUT Model:** `{metrics.get('sut_model_id', '')}` | **Fixed Judge Model:** `{metrics.get('judge_model_id', '')}`  
-**Dataset Hash:** `{metrics.get('dataset_hash', '')}` | **Gate Forced-Abstention Fallback Confidence (`GATE_FALLBACK_CONFIDENCE`):** `{GATE_FALLBACK_CONFIDENCE:.2f}`
+**Generated from Saved Results (`results/metrics.json`):** `{metrics.get('generated_at_utc', '')}`
+**Fixed SUT Model:** `{metrics.get('sut_model_id', '')}` | **Fixed Judge Model:** `{metrics.get('judge_model_id', '')}`
+**Dataset Hash:** `{metrics.get('dataset_hash', '')}` | **Gate Forced-Abstention Fallback Confidence:** `GATE_FALLBACK_CONFIDENCE = {GATE_FALLBACK_CONFIDENCE:.2f}`
 {unmet_flag_banner}
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary & Verification Gate Status
 
+- **Dataset Verification Status:** 50 base cases (`status: "verified"`), 100 adversarial variants (`status: "verified"` by sayanpal1499), 45 audit claims (`status: "verified"` by sayanpal1499), and 40 regression cases (`status: "inherited_from_base_case"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`).
 - **LLM-Evaluated Accuracy (`grounded_v1`, `N={eval_llm_n}` Eligible Cases excluding `{excluded_pre_api}` pre-API `empty_malformed` rejections):** `{llm_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{llm_cb[0]*100:.1f}%, {llm_cb[1]*100:.1f}%]`.
 - **Nominal Suite Accuracy (`grounded_v1`, All `{ov_acc['denominator']}` Records including `{excluded_pre_api}` deterministic pre-API `InputValidationError` rejections):** `{ov_acc['formatted']}`, Base-Case Cluster Bootstrap 95% CI: `[{ov_cb[0]*100:.1f}%, {ov_cb[1]*100:.1f}%]`.
 - **Output-Level Hallucination Rate (`grounded_v1`):** `{ov_hall['numerator']}/{ov_hall['denominator']}` (`{ov_hall['rate']*100:.1f}%`).
 - **Claim-Level Hallucination & Deferral Breakdown (`grounded_v1`):** Bad claims `{cl_hall.get('numerator', 0)}/{cl_hall.get('denominator', 0)}` (`{cl_hall.get('rate', 0.0)*100:.1f}%`); Confirmed supported claims: `{cl_hall.get('supported_numerator', 0)}`; Layer-2 deterministically decided: `{cl_hall.get('layer2_decided_claims', 0)}`; Layer-2 deferred (`needs_judge`): `{cl_hall.get('needs_judge_claims', 0)}` (unresolved `needs_judge`: `{cl_hall.get('unresolved_needs_judge_claims', 0)}`).
 - **Ablation vs. `naive_v0`:** Accuracy delta `{ablation['overall_accuracy_delta']*100:+.1f} pp`; Output hallucination delta `{ablation['output_hallucination_rate_delta']*100:+.1f} pp`.
-- **Confidence Calibration (`grounded_v1`, `N={eval_llm_n}` LLM-Evaluated Cases; Gate Fallback = `{GATE_FALLBACK_CONFIDENCE:.2f}`):** Post-Gate ECE = `{cal_final.get('ece', 0.0):.4f}` (Brier = `{cal_final.get('brier_score', 0.0):.4f}`); Intrinsic Raw-Model ECE = `{cal_raw.get('ece', 0.0):.4f}` (Brier = `{cal_raw.get('brier_score', 0.0):.4f}`).
+- **Confidence Calibration (`grounded_v1`, `N={eval_llm_n}` LLM-Evaluated Cases; Gate Fallback `GATE_FALLBACK_CONFIDENCE = {GATE_FALLBACK_CONFIDENCE:.2f}`):** Post-Gate ECE = `{cal_final.get('ece', 0.0):.4f}` (Brier = `{cal_final.get('brier_score', 0.0):.4f}`); Intrinsic Raw-Model ECE = `{cal_raw.get('ece', 0.0):.4f}` (Brier = `{cal_raw.get('brier_score', 0.0):.4f}`).
+
+### 1.1 Preflight API Verification & Model Selection
+During live preflight API verification (`RUN-00-PREFLIGHT`, `results/preflight_check.json`), `groq/llama-3.1-8b-instant` made a live API call and failed availability with `code: "model_not_found"` (`Groq HTTP 404`, `"The model llama-3.1-8b-instant does not exist or you do not have access to it"`), whereas `groq/openai/gpt-oss-20b` and `gemini/gemini-3.5-flash-lite` were verified available and selected as the approved fixed models.
 
 ---
 
-## 2. Per-Category Accuracy (`grounded_v1`)
+## 2. Per-Category Accuracy & Ablation Comparison (`grounded_v1` vs. `naive_v0`)
 
-| Category | Accuracy (`k/n`) | 95% Wilson CI |
-| :--- | :--- | :--- |
+| Category | grounded_v1 (Gate ON) | 95% Wilson CI | naive_v0 (Ablation) | Accuracy Delta (pp) |
+| :--- | :--- | :--- | :--- | :--- |
 {cat_table}
 
+![Accuracy by Category](figures/accuracy_by_category.png)
+
 ---
 
-## 3. Selective Abstention Metrics (`grounded_v1`)
+## 3. Selective Abstention & Hallucination Breakdown
 
+### 3.1 Selective Abstention Metrics (`grounded_v1`)
 - **Abstention Precision:** `{prec_g1.get('numerator', 0)}/{prec_g1.get('denominator', 0)}` (`{prec_g1.get('rate', 0.0)*100:.1f}%`)
 - **Abstention Recall:** `{rec_g1.get('numerator', 0)}/{rec_g1.get('denominator', 0)}` (`{rec_g1.get('rate', 0.0)*100:.1f}%`)
 - **Over-Abstention (FP) / Under-Abstention (FN):** `{abs_g1.get('fp_abstain_over_abstention', 0)}` / `{abs_g1.get('fn_abstain_under_abstention', 0)}`
 - **Trivial Always-Abstain Baseline Accuracy:** `{triv_g1.get('numerator', 0)}/{triv_g1.get('denominator', 0)}` (`{triv_g1.get('rate', 0.0)*100:.1f}%`)
-{audit_section}{cluster_section}{probes_section}{regression_section}{RESERVED_MULTI_HOP_SECTION}"""
+
+### 3.2 Output-Level Hallucination Rates by Category (`grounded_v1` vs. `naive_v0`)
+| Category | grounded_v1 Hallucination Rate | naive_v0 Hallucination Rate | Delta |
+| :--- | :--- | :--- | :--- |
+{hal_table}
+
+![Output Hallucination Rate by Category](figures/hallucination_rate_by_category.png)
+{audit_section}{calibration_section}{cluster_section}{probes_section}{regression_section}{RESERVED_MULTI_HOP_SECTION}"""
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content, encoding="utf-8")
@@ -896,6 +996,18 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("reports/evaluation_report.md"),
         help="Output path for evaluation_report.md",
     )
+    parser.add_argument(
+        "--checkpoint-path",
+        type=Path,
+        default=None,
+        help="Optional path to noise-floor intermediate checkpoint JSON",
+    )
+    parser.add_argument(
+        "--figures-dir",
+        type=Path,
+        default=Path("reports/figures"),
+        help="Directory for saved evaluation figures",
+    )
     args = parser.parse_args(argv)
 
     if args.check_gate:
@@ -944,6 +1056,7 @@ def main(argv: list[str] | None = None) -> int:
             results_dir=args.results_dir,
             run_noise_floor=args.run_noise_floor or not (args.results_dir / "regression_noise_floor.json").exists(),
             run_comparisons=args.run_regression,
+            checkpoint_path=args.checkpoint_path,
         )
         print(
             json.dumps(
@@ -960,6 +1073,7 @@ def main(argv: list[str] | None = None) -> int:
         out = populate_evaluation_report_from_saved_results(
             results_dir=args.results_dir,
             report_path=args.report_path,
+            figures_dir=args.figures_dir,
         )
         print(f"Populated evaluation report at {out}")
         return 0

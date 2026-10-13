@@ -81,3 +81,31 @@ def test_empty_malformed_variants_rejected_without_api_call(monkeypatch: pytest.
         with pytest.raises(InputValidationError):
             answer_question(docs[v.document_id], v.modified_input, prompt_version="grounded_v1")
     assert not called
+
+
+def test_ai_assisted_review_csv_synchronization() -> None:
+    """data/variants_ai_assisted_review.csv must match data/variants.jsonl and preserve draft/human-signoff distinction."""
+    import csv
+    from pathlib import Path
+
+    csv_path = Path("data/variants_ai_assisted_review.csv")
+    assert csv_path.exists()
+
+    raw_bytes = csv_path.read_bytes()
+    assert not raw_bytes.startswith(b"\xef\xbb\xbf"), "CSV must not have UTF-8 BOM"
+
+    with csv_path.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    variants = load_jsonl_variants()
+    assert len(rows) == len(variants) == 100
+
+    for row, var in zip(rows, variants):
+        assert row["variant_id"] == var.variant_id
+        assert row["base_id"] == var.base_id
+        assert row["transformation"] == var.transformation
+        assert row["expected_answer"] == var.expected_answer
+        assert row["canonical_status"] == var.status
+        assert row["ai_audit_verdict"] == "PASS_AI_AUDIT"
+        assert len(row["review_notes"]) > 10

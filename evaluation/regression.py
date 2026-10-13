@@ -15,8 +15,11 @@ Implements:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import random
 from typing import Any, Callable, Optional
 
 from evaluation.clustering import assign_initial_failure_cluster
@@ -307,6 +310,14 @@ def build_canonical_regression_cases(
     return frozen_cases
 
 
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    """Atomically write JSON data by writing to a temporary file and replacing target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp.{os.getpid()}.{random.randint(1000, 9999)}")
+    tmp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_path.replace(path)
+
+
 def run_noise_floor_experiment(
     regression_cases: list[dict[str, Any]],
     num_runs: int = 3,
@@ -314,13 +325,27 @@ def run_noise_floor_experiment(
     prompt_version: str = "grounded_v1",
     qa_runner_fn: Optional[Callable[..., Any]] = None,
     scorer_fn: Optional[Callable[[dict[str, Any], QAOutput], dict[str, Any]]] = None,
+    checkpoint_path: Optional[Path | str] = None,
 ) -> dict[str, Any]:
-    """Run frozen baseline cases `num_runs` times with `bypass_cache=True` to measure the noise floor."""
+    """Run frozen baseline cases `num_runs` times with `bypass_cache=True` to measure the noise floor.
+
+    Supports incremental atomic checkpointing and resume so interrupted runs never
+    lose completed repetitions or double-count executions.
+    """
     if num_runs < 1:
         raise ValueError("num_runs must be >= 1")
 
     runner = qa_runner_fn or answer_question
     scorer = scorer_fn or (lambda c, out: _default_score_case(c, out))
+
+    cp_file = Path(checkpoint_path) if checkpoint_path is not None else None
+    checkpoint_cases_by_id: dict[str, dict[str, Any]] = {}
+    if cp_file is not None and cp_file.exists():
+        try:
+            loaded_cp = json.loads(cp_file.read_text(encoding="utf-8"))
+            checkpoint_cases_by_id = dict(loaded_cp.get("cases_by_id", {}))
+        except (json.JSONDecodeError, OSError):
+            checkpoint_cases_by_id = {}
 
     per_case_results: list[dict[str, Any]] = []
     flaky_ids: list[str] = []
@@ -330,11 +355,31 @@ def run_noise_floor_experiment(
 
     for case in regression_cases:
         cid = _extract_case_id(case)
+        existing_case = checkpoint_cases_by_id.get(cid, {})
+        existing_runs = list(existing_case.get("runs", []))
+
         run_outcomes: list[dict[str, Any]] = []
         pass_count = 0
         normalized_answers_seen: set[tuple[str, bool]] = set()
 
-        for run_idx in range(1, num_runs + 1):
+        # 1. Reuse existing completed runs from checkpoint
+        for prior_run in existing_runs:
+            run_outcomes.append(prior_run)
+            if prior_run.get("is_correct"):
+                pass_count += 1
+                ridx = int(prior_run.get("run_index", 1)) - 1
+                if 0 <= ridx < num_runs:
+                    run_pass_counts[ridx] += 1
+            normalized_answers_seen.add(
+                (
+                    " ".join(str(prior_run.get("answer", "")).strip().lower().split()),
+                    bool(prior_run.get("abstained")),
+                )
+            )
+
+        # 2. Execute remaining runs from len(existing_runs) + 1 to num_runs
+        start_run = len(existing_runs) + 1
+        for run_idx in range(start_run, num_runs + 1):
             try:
                 raw_res = runner(
                     document=case["document"],
@@ -374,6 +419,38 @@ def run_noise_floor_experiment(
                 }
             )
 
+            # Atomically checkpoint intermediate repetition if checkpoint_path is set
+            if cp_file is not None:
+                checkpoint_cases_by_id[cid] = {
+                    "case_id": cid,
+                    "category": case.get("category", "base"),
+                    "num_runs": num_runs,
+                    "pass_count": pass_count,
+                    "fail_count": len(run_outcomes) - pass_count,
+                    "is_flaky": pass_count < len(run_outcomes),
+                    "has_answer_flip": len(normalized_answers_seen) > 1,
+                    "status": "flaky" if pass_count < len(run_outcomes) else "stable_pass",
+                    "runs": run_outcomes,
+                }
+                _atomic_write_json(
+                    cp_file,
+                    {
+                        "model_id": model_id,
+                        "prompt_version": prompt_version,
+                        "num_repetitions": num_runs,
+                        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+                        "total_cases": len(regression_cases),
+                        "completed_case_count": len(
+                            [
+                                c
+                                for c in checkpoint_cases_by_id.values()
+                                if len(c.get("runs", [])) >= num_runs
+                            ]
+                        ),
+                        "cases_by_id": checkpoint_cases_by_id,
+                    },
+                )
+
         is_flaky = pass_count < num_runs
         has_answer_flip = len(normalized_answers_seen) > 1
         if is_flaky:
@@ -383,19 +460,39 @@ def run_noise_floor_experiment(
         if has_answer_flip:
             answer_flip_ids.append(cid)
 
-        per_case_results.append(
-            {
-                "case_id": cid,
-                "category": case.get("category", "base"),
-                "num_runs": num_runs,
-                "pass_count": pass_count,
-                "fail_count": num_runs - pass_count,
-                "is_flaky": is_flaky,
-                "has_answer_flip": has_answer_flip,
-                "status": "flaky" if is_flaky else "stable_pass",
-                "runs": run_outcomes,
-            }
-        )
+        case_entry = {
+            "case_id": cid,
+            "category": case.get("category", "base"),
+            "num_runs": num_runs,
+            "pass_count": pass_count,
+            "fail_count": num_runs - pass_count,
+            "is_flaky": is_flaky,
+            "has_answer_flip": has_answer_flip,
+            "status": "flaky" if is_flaky else "stable_pass",
+            "runs": run_outcomes,
+        }
+        per_case_results.append(case_entry)
+
+        if cp_file is not None:
+            checkpoint_cases_by_id[cid] = case_entry
+            _atomic_write_json(
+                cp_file,
+                {
+                    "model_id": model_id,
+                    "prompt_version": prompt_version,
+                    "num_repetitions": num_runs,
+                    "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "total_cases": len(regression_cases),
+                    "completed_case_count": len(
+                        [
+                            c
+                            for c in checkpoint_cases_by_id.values()
+                            if len(c.get("runs", [])) >= num_runs
+                        ]
+                    ),
+                    "cases_by_id": checkpoint_cases_by_id,
+                },
+            )
 
     total = len(regression_cases)
     flaky_count = len(flaky_ids)
@@ -610,6 +707,7 @@ def execute_regression_and_noise_floor_pipeline(
     scorer_fn: Optional[Callable[[dict[str, Any], QAOutput], dict[str, Any]]] = None,
     run_noise_floor: bool = True,
     run_comparisons: bool = True,
+    checkpoint_path: Optional[Path | str] = None,
 ) -> dict[str, Any]:
     """Execute the Phase 8 noise-floor experiment and `grounded_v2` vs `grounded_v2_bad` regression suite."""
     reg_path = Path(regression_cases_path)
@@ -622,6 +720,11 @@ def execute_regression_and_noise_floor_pipeline(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     noise_floor_path = out_dir / "regression_noise_floor.json"
+    cp_path = (
+        Path(checkpoint_path)
+        if checkpoint_path is not None
+        else (out_dir / "regression_noise_floor_checkpoint.json")
+    )
     if run_noise_floor:
         noise_report = run_noise_floor_experiment(
             regression_cases=regression_cases,
@@ -630,10 +733,9 @@ def execute_regression_and_noise_floor_pipeline(
             prompt_version="grounded_v1",
             qa_runner_fn=qa_runner_fn,
             scorer_fn=scorer_fn,
+            checkpoint_path=cp_path,
         )
-        noise_floor_path.write_text(
-            json.dumps(noise_report, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        _atomic_write_json(noise_floor_path, noise_report)
     elif noise_floor_path.exists():
         noise_report = json.loads(noise_floor_path.read_text(encoding="utf-8"))
     else:
@@ -668,9 +770,7 @@ def execute_regression_and_noise_floor_pipeline(
         qa_runner_fn=qa_runner_fn,
         scorer_fn=scorer_fn,
     )
-    (out_dir / "regression_grounded_v2.json").write_text(
-        json.dumps(v2_report, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _atomic_write_json(out_dir / "regression_grounded_v2.json", v2_report)
 
     bad_cases = (
         regression_cases[:bad_subset_size]
@@ -687,9 +787,7 @@ def execute_regression_and_noise_floor_pipeline(
         qa_runner_fn=qa_runner_fn,
         scorer_fn=scorer_fn,
     )
-    (out_dir / "regression_planted_bad.json").write_text(
-        json.dumps(bad_report, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _atomic_write_json(out_dir / "regression_planted_bad.json", bad_report)
 
     head_to_head = compare_grounded_v2_vs_bad(v2_report, bad_report)
     combined_payload = {
@@ -699,9 +797,7 @@ def execute_regression_and_noise_floor_pipeline(
         "grounded_v2_bad": bad_report,
         "v2_vs_bad_comparison": head_to_head,
     }
-    (out_dir / "regression_report.json").write_text(
-        json.dumps(combined_payload, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _atomic_write_json(out_dir / "regression_report.json", combined_payload)
     return combined_payload
 
 
@@ -748,6 +844,12 @@ def main(argv: list[str] | None = None) -> int:
         default=3,
         help="Number of uncached repetitions for noise-floor estimation (default: 3)",
     )
+    parser.add_argument(
+        "--checkpoint-path",
+        type=Path,
+        default=None,
+        help="Optional path to noise-floor intermediate checkpoint JSON",
+    )
     args = parser.parse_args(argv)
 
     if args.build_baseline:
@@ -775,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
             num_noise_runs=args.num_runs,
             run_noise_floor=args.run_noise_floor or not (args.results_dir / "regression_noise_floor.json").exists(),
             run_comparisons=args.run_regression,
+            checkpoint_path=args.checkpoint_path,
         )
         print(
             json.dumps(
