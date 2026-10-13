@@ -172,7 +172,7 @@ class AuditClaimRecord(BaseModel):
 
 
 class RegressionCaseRecord(BaseModel):
-    """Frozen baseline test case record in data/regression_cases.jsonl (Phase 8)."""
+    """Frozen or canonical-seed baseline test case record in data/regression_cases.jsonl (Phase 8)."""
 
     case_id: str
     base_id: str
@@ -201,7 +201,16 @@ class RegressionCaseRecord(BaseModel):
     baseline_model_id: str = "groq/openai/gpt-oss-20b"
     baseline_prompt_version: str = "grounded_v1"
     dataset_version: str = "v1.0"
-    status: Literal["draft", "verified"] = "verified"
+    status: Literal["inherited_from_base_case", "verified", "draft"] = "inherited_from_base_case"
+    verification_source: Literal[
+        "inherited_from_base_case", "independent_human_review", "unverified"
+    ] = "inherited_from_base_case"
+    source_base_status: Optional[Literal["verified", "draft"]] = "verified"
+    source_base_verified_by: Optional[str] = None
+    source_base_verified_on: Optional[str] = None
     verified_by: Optional[str] = None
     verified_on: Optional[str] = None
-
+    baseline_source: Literal[
+        "canonical_base_case_seed", "live_evaluation_run", "mock_evaluation_run"
+    ] = "canonical_base_case_seed"
+    notes: str = ""

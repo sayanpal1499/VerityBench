@@ -243,7 +243,7 @@ def build_canonical_regression_cases(
     prompt_version: str = "grounded_v1",
     dataset_version: str = "v1.0",
 ) -> list[dict[str, Any]]:
-    """Build `data/regression_cases.jsonl` from human-verified canonical base cases."""
+    """Build `data/regression_cases.jsonl` by inheriting ground truth from verified canonical base cases."""
     docs = load_documents(Path(docs_dir))
     base_cases = load_jsonl_base_cases(Path(base_cases_path))
     verified_bases = [b for b in base_cases if b.status == "verified"]
@@ -272,9 +272,21 @@ def build_canonical_regression_cases(
                 "baseline_model_id": model_id,
                 "baseline_prompt_version": prompt_version,
                 "dataset_version": dataset_version,
-                "status": b.status,
-                "verified_by": b.verified_by,
-                "verified_on": b.verified_on,
+                "status": "inherited_from_base_case",
+                "verification_source": "inherited_from_base_case",
+                "source_base_status": b.status,
+                "source_base_verified_by": b.verified_by,
+                "source_base_verified_on": b.verified_on,
+                "verified_by": None,
+                "verified_on": None,
+                "baseline_source": "canonical_base_case_seed",
+                "notes": (
+                    f"Ground-truth question, expected_answer, expected_evidence, and should_abstain "
+                    f"inherited directly from human-verified canonical base case {b.id} in "
+                    f"data/base_cases.jsonl (source_base_verified_by={b.verified_by}, "
+                    f"source_base_verified_on={b.verified_on}); not independently human-reviewed "
+                    f"as a separate regression dataset and not yet frozen from a live grounded_v1 run."
+                ),
             }
         )
 

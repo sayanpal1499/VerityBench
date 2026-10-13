@@ -157,3 +157,21 @@ def test_parse_duration_seconds() -> None:
     assert _parse_duration_seconds("12.5s") == pytest.approx(12.5)
     assert _parse_duration_seconds("1m30s") == pytest.approx(90.0)
     assert _parse_duration_seconds("500ms") == pytest.approx(0.5)
+
+
+def test_gemini_missing_dependency_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.llm_client as llm_client
+
+    monkeypatch.setattr(llm_client, "genai", None)
+    monkeypatch.setattr(llm_client, "types", None)
+    with pytest.raises(LLMClientError, match="Missing 'google-genai' package"):
+        llm_client._call_gemini_api(
+            model_id="gemini-3.5-flash-lite",
+            system_prompt="sys",
+            prompt="hello",
+            temperature=0.0,
+            seed=42,
+            max_output_tokens=64,
+            json_mode=True,
+            response_schema=None,
+        )

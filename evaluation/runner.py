@@ -396,10 +396,10 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **PowerShell:**
 ```powershell
-# 1. Run the 53-test offline test suite (zero external API calls)
+# 1. Run the 54-test offline test suite (zero external API calls)
 .\\.venv\\Scripts\\python.exe -m pytest -v
 
-# 2. Validate all datasets (50 base cases, 40 regression cases, 45 audit claims, 100 draft variants)
+# 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)
 .\\.venv\\Scripts\\python.exe -m evaluation.dataset --allow-draft --check-variants --check-audit-claims --check-regression-cases
 
 # 3. Check strict verification gate, run full evaluation, causal probes, noise floor, regression & report builder
@@ -412,10 +412,10 @@ Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluat
 
 **Bash:**
 ```bash
-# 1. Run the 53-test offline test suite (zero external API calls)
+# 1. Run the 54-test offline test suite (zero external API calls)
 ./.venv/bin/python -m pytest -v
 
-# 2. Validate all datasets (50 base cases, 40 regression cases, 45 audit claims, 100 draft variants)
+# 2. Validate all datasets (50 base cases, 40 regression cases inheriting base-case ground truth, 45 audit claims, 100 draft variants)
 ./.venv/bin/python -m evaluation.dataset --allow-draft --check-variants --check-audit-claims --check-regression-cases
 
 # 3. Check strict verification gate, run full evaluation, causal probes, noise floor, regression & report builder
@@ -456,29 +456,31 @@ def _build_pre_live_evaluation_report(
 
 ## 1. Executive Summary & Current Verification Gate Status
 
-VerityBench evaluates a strictly grounded Document Question Answering (QA) system across **8 synthetic multi-paragraph domain documents (`DOC-001`–`DOC-008`)**, **50 human-verified base cases (`BASE-001`–`BASE-050`)**, **100 adversarial variants (`VAR-001`–`VAR-100`)**, **40 human-verified regression baseline cases (`data/regression_cases.jsonl`)**, and **45 human-verified audit claims (`AUD-001`–`AUD-045`)**.
+VerityBench evaluates a strictly grounded Document Question Answering (QA) system across **8 synthetic multi-paragraph domain documents (`DOC-001`–`DOC-008`)**, **50 human-verified base cases (`BASE-001`–`BASE-050`)**, **100 adversarial variants (`VAR-001`–`VAR-100`)**, **40 canonical regression cases (`data/regression_cases.jsonl`, ground truth inherited from `BASE-001`–`BASE-040`)**, and **45 human-verified audit claims (`AUD-001`–`AUD-045`)**.
 
-### 1.1 Distinction Between Measured Offline Benchmarks, Preflight Smoke Tests, Mocked Unit-Test Dry Runs, and Live Model Evaluation
+### 1.1 Distinction Between Offline Tests, Fake-LLM Integration Tests, Recorded Preflight API Calls, and the Full Live Benchmark
 Per the repository's **Strict Ground-Truth Governance Gate** ([`verify_all_records_before_run`](../evaluation/runner.py)):
 1. **Source Documents (`data/documents/DOC-001..008.txt`):** `8 / 8` complete (`417–485` words each).
 2. **Base Cases ([`data/base_cases.jsonl`](../data/base_cases.jsonl)):** **`50 / 50` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-12"`).
-3. **Regression Baseline Cases ([`data/regression_cases.jsonl`](../data/regression_cases.jsonl)):** **`40 / 40` `status: "verified"`** (constructed from 40 canonical human-verified base cases `BASE-001`–`BASE-040`, validated via `validate_regression_cases`).
+3. **Regression Cases ([`data/regression_cases.jsonl`](../data/regression_cases.jsonl)):** **`40 / 40` `status: "inherited_from_base_case"`** (`verification_source: "inherited_from_base_case"`, `baseline_source: "canonical_base_case_seed"`, `verified_by: null`, `verified_on: null`, with `source_base_verified_by: "sayanpal1499"` and `source_base_verified_on: "2026-10-12"` inherited directly from `BASE-001`–`BASE-040` in `data/base_cases.jsonl`). These 40 records were **not** independently human-reviewed a second time as a separate dataset and have **not** yet been frozen from a live `grounded_v1` evaluation run.
 4. **Hallucination Audit Claims ([`data/audit_claims.jsonl`](../data/audit_claims.jsonl)):** **`45 / 45` `status: "verified"`** (`verified_by: "sayanpal1499"`, `verified_on: "2026-10-13"`, `0` remaining `needs_human_review` flags).
 5. **Adversarial Variants ([`data/variants.jsonl`](../data/variants.jsonl)):** **`100 / 100` `status: "draft"`** (`verified_by: null`, `verified_on: null`).
    - All 100 variants (`VAR-001`–`VAR-100`) were systematically audited automatically against the canonical source documents, base cases, and expected evidence (`VAR-001`–`VAR-020` were also reviewed in human batches 1–2; `VAR-021`–`VAR-100` are consolidated in [`data/variants_final_review_checklist.md`](../data/variants_final_review_checklist.md)), but the full 100-variant set has **not** been individually human-verified.
    - Because human verification metadata (`status: "verified"`, `verified_by`, `verified_on`) is never fabricated or auto-populated without actual individual human verification, `data/variants.jsonl` remains in `status: "draft"`.
-6. **Summary of What Is Measured vs. Simulated vs. Unavailable:**
-   - **Measured Offline (`results/audit_benchmark_offline.json`):** Layer-1/Layer-2 deterministic hallucination detector evaluated on all 45 verified audit claims (`allow_llm_judge=False`). Note that these 45 claims constitute a **non-independent, in-sample rule-development audit set**, not a held-out blind benchmark.
-   - **Measured Live Preflight (`results/preflight_check.json`):** Live API connectivity, schema validation, rate-limit header inspection, token/latency telemetry, and SHA-256 disk-cache replay for `groq/openai/gpt-oss-20b` (SUT) and `gemini/gemini-3.5-flash-lite` (independent judge), plus 5 manual smoke-test scenarios (`EX-1`–`EX-5`).
-   - **Simulated / Mocked Offline (`pytest` Suite):** All unit and integration tests for `execute_verified_evaluation`, `run_noise_floor_experiment`, `run_prompt_regression_comparison` (`grounded_v2` vs. `grounded_v2_bad`), and `run_causal_probes_for_clusters` execute against deterministic fake-LLM mocks to verify code paths without consuming API credits. Mocked dry-run outputs are **never** reported as live model performance.
-   - **Unavailable / Not Yet Run (`Live 150-Nominal / 144-LLM-Eligible Evaluation`):** Because `data/variants.jsonl` remains in `status: "draft"`, [`verify_all_records_before_run()`](../evaluation/runner.py) blocks `python -m evaluation.runner --run-all`. No live model accuracy, hallucination rates, calibration scores, or observed failure cluster counts are claimed or invented in this report.
+6. **Four-Way Separation of What Is Measured, Simulated, Recorded in Preflight, and Unavailable:**
+   - **Measured Offline Benchmark (`results/audit_benchmark_offline.json`):** Layer-1/Layer-2 deterministic hallucination detector evaluated on all 45 verified audit claims (`allow_llm_judge=False`). Note that these 45 claims constitute a **non-independent, in-sample rule-development audit set**, not a held-out blind benchmark.
+   - **Synthetic / Fake-LLM Unit & Integration Tests (`pytest` Suite):** All unit and integration tests for `execute_verified_evaluation`, `run_noise_floor_experiment`, `run_prompt_regression_comparison` (`grounded_v2` vs. `grounded_v2_bad`), and `run_causal_probes_for_clusters` execute against deterministic fake-LLM mocks (`0` network calls during `pytest`) to verify code paths without consuming API credits. Mocked dry-run outputs are **never** reported as real model results.
+   - **Recorded Live Preflight API Results ([`results/preflight_check.json`](../results/preflight_check.json) & `.cache/llm_responses/`):** Live external API requests **did occur** on `2026-10-12` during `RUN-00-PREFLIGHT`:
+     - The initial Groq model check for **`groq/llama-3.1-8b-instant` made a live API request and failed the model-availability check** with `Groq HTTP 404` (`code: "model_not_found"`, `"The model llama-3.1-8b-instant does not exist or you do not have access to it"`, `available: false`).
+     - Subsequent live Groq preflight requests tested `groq/openai/gpt-oss-20b` (`available: true`, `latency_ms=1008.93`, `system_fingerprint="fp_816fc87d18"`, `cached_replay_hit=True`) and `groq/qwen/qwen3.8-27b` (`available: true`, `latency_ms=672.06`, `system_fingerprint="fp_424cb89518"`), and a live Gemini preflight request tested `gemini/gemini-3.5-flash-lite` (`available: true`, `latency_ms=1831.32`, `response_json_schema=True`, `cached_replay_hit=True`), plus 5 manual smoke-test scenarios (`EX-1`–`EX-5` on `groq/openai/gpt-oss-20b`, storing 15 cached responses in `.cache/llm_responses/`).
+   - **Unavailable / Not Yet Run (`Full Live 150-Nominal / 144-LLM-Eligible Evaluation`):** While live preflight API calls were executed in `RUN-00-PREFLIGHT`, the complete 150-case evaluation (`50` base + `100` variants) has **not** been run. Because `data/variants.jsonl` remains in `status: "draft"`, [`verify_all_records_before_run()`](../evaluation/runner.py) blocks `python -m evaluation.runner --run-all`. No live benchmark accuracy, hallucination rates, calibration scores, or observed failure cluster counts are claimed or invented in this report.
 
 ### 1.2 Why the Nominal 150-Case Suite Contains 144 LLM-Eligible Cases (`6` `empty_malformed` Pre-API Exclusions)
 - The full benchmark dataset comprises **150 nominal records**: **50 base cases** (`BASE-001`–`BASE-050`) + **100 adversarial variants** (`VAR-001`–`VAR-100`).
 - However, **6 adversarial variants (`VAR-095`–`VAR-100`)** belong to the `empty_malformed` category (`""`, `"   \\n\\t  "`, `"???!!!"`, `"?"`, a 2,100-character string exceeding `MAX_QUESTION_CHARS = 2000`, and `"\\n\\n---\\n\\n"`).
 - In [`run_qa_suite_for_prompt()`](../evaluation/runner.py), `answer_question()` invokes [`validate_inputs()`](../src/qa_system.py) **before** any LLM API call is made. All 6 `empty_malformed` inputs deterministically raise `InputValidationError` pre-API and are recorded with `validation_rejected=True` (`abstained=True, confidence=1.0`, zero API tokens consumed).
 - Consequently:
-  - **LLM-Eligible / LLM-Evaluated Cases (`N = 144`):** Exactly **144 cases** (`50` base cases + `94` non-empty variants) invoke the LLM. [`compute_all_metrics()`](../evaluation/metrics.py) reports `overall_llm_evaluated_144` (`N = 144`) alongside `overall_all_150` (`N = 150`), and [`compute_full_calibration_report()`](../evaluation/calibration.py) computes ECE and Brier scores strictly over the **`N = 144`** LLM-evaluated records (`excluded_pre_api_validation_records_n = 6`), because pre-API input validation rejections do not have a model-generated probability.
+   - **LLM-Eligible / LLM-Evaluated Cases (`N = 144`):** Exactly **144 cases** (`50` base cases + `94` non-empty variants) invoke the LLM. [`compute_all_metrics()`](../evaluation/metrics.py) reports `overall_llm_evaluated_144` (`N = 144`) alongside `overall_all_150` (`N = 150`), and [`compute_full_calibration_report()`](../evaluation/calibration.py) computes ECE and Brier scores strictly over the **`N = 144`** LLM-evaluated records (`excluded_pre_api_validation_records_n = 6`), because pre-API input validation rejections do not have a model-generated probability.
 
 ---
 
@@ -495,13 +497,15 @@ Every call to [`answer_question()`](../src/qa_system.py) enforces a three-stage 
    - Near-miss quotes with `difflib.SequenceMatcher` similarity ratio **`>= 0.90`** are recorded in `QATrace.quote_checks` with `match_type="fuzzy_candidate"` (and counted in `QATrace.fuzzy_candidate_count`) for diagnostic analysis, but **never** pass the gate (`passed_gate=False`).
    - **Forced-Abstention Fallback Confidence (`GATE_FALLBACK_CONFIDENCE = 0.50`):** If `raw_output.abstained == False` and no cited quote passes verification, `apply_evidence_quote_gate()` overrides the output to `abstained=True`, clears `evidence=[]`, and assigns **`confidence = GATE_FALLBACK_CONFIDENCE = 0.50`** (while preserving the unaltered `raw_output` inside `QATrace`). As disclosed in [`evaluation/calibration.py`](../evaluation/calibration.py), `0.50` is a deterministic engineering fallback heuristic placed in bin `[0.5, 0.6)`—not a model-measured probability—which is why **Intrinsic Raw-Model Calibration** (`raw_confidence` vs. `raw_is_correct`) and **Post-Gate System Calibration** (`confidence` vs. `is_correct`) are computed and reported separately (along with a third `non_gate_overridden_calibration` view).
 
-### 2.2 Reproducibility & Hosted-Model Determinism Limitations
+### 2.2 Reproducibility, Preflight API Findings & Hosted-Model Determinism Limitations
 Hosted LLM providers (`groq` and `gemini`) do not guarantee strict bit-for-bit determinism across distributed GPU workers even when `temperature=0.0` and `seed=42` are passed.
-- [`src/llm_client.py`](../src/llm_client.py) passes `temperature=0.0` and `seed=42` on every request, logs `parameters_requested`, `parameters_supported`, `parameters_unsupported`, and `system_fingerprint`, and persists responses in `.cache/llm_calls/<sha256>.json`.
-- **Measured Preflight Verification (`results/preflight_check.json`):**
-  - `groq/openai/gpt-oss-20b`: Verified available (`latency_ms=1008.93`, `system_fingerprint="fp_816fc87d18"`, `cached_replay_hit=True`).
-  - `gemini/gemini-3.5-flash-lite`: Verified available (`latency_ms=1831.32`, structured `response_json_schema=True`, `cached_replay_hit=True`).
-  - All 5 manual smoke-test scenarios (`EX-1` clean numeric lookup, `EX-2` near-miss sibling entity `Velox-400` vs. `Velox-900`, `EX-3` two-clause synthesis, `EX-4` unanswerable weight lookup, and `EX-5` false numeric premise correction `9.5 bar -> 4.2 bar`) passed verbatim quote gating on the first run.
+- [`src/llm_client.py`](../src/llm_client.py) passes `temperature=0.0` and `seed=42` on every request, logs `parameters_requested`, `parameters_supported`, `parameters_unsupported`, and `system_fingerprint`, and persists responses in `.cache/llm_responses/<sha256>.json`.
+- **Recorded Live Preflight Verification (`results/preflight_check.json`):**
+  - `groq/llama-3.1-8b-instant`: Made a live Groq API request and **failed** model availability (`available: false`, `Groq HTTP 404`, `code: "model_not_found"`, `"The model llama-3.1-8b-instant does not exist or you do not have access to it"`).
+  - `groq/openai/gpt-oss-20b`: Verified available via live Groq API call (`available: true`, `latency_ms=1008.93`, `system_fingerprint="fp_816fc87d18"`, `cached_replay_hit=True`) and selected as the approved fixed SUT model.
+  - `groq/qwen/qwen3.8-27b`: Also verified available during Groq preflight (`available: true`, `latency_ms=672.06`, `system_fingerprint="fp_424cb89518"`).
+  - `gemini/gemini-3.5-flash-lite`: Verified available via live Gemini API call (`available: true`, `latency_ms=1831.32`, structured `response_json_schema=True`, `cached_replay_hit=True`) and selected as the approved fixed independent judge model.
+  - All 5 manual smoke-test scenarios (`EX-1` clean numeric lookup, `EX-2` near-miss sibling entity `Velox-400` vs. `Velox-900`, `EX-3` two-clause synthesis, `EX-4` unanswerable weight lookup, and `EX-5` false numeric premise correction `9.5 bar -> 4.2 bar`) were executed live against `groq/openai/gpt-oss-20b` and passed verbatim quote gating on the first run.
 
 ---
 
@@ -612,7 +616,7 @@ Because the Evidence-Quote Gate deterministically overrides `confidence = GATE_F
 ## 7. Prompt Regression Harness, 3-Run Noise Floor & `grounded_v2` vs. `grounded_v2_bad`
 
 [`evaluation/regression.py`](../evaluation/regression.py) and [`data/regression_cases.jsonl`](../data/regression_cases.jsonl) implement the complete Phase 8 regression workflow (exposed via `python -m evaluation.runner --run-noise-floor` and `python -m evaluation.runner --run-regression`):
-1. **Validated Regression Baseline (`data/regression_cases.jsonl`):** Contains **40 human-verified canonical base cases** (`BASE-001`–`BASE-040`, `32` answerable + `8` unanswerable across `DOC-001`–`DOC-008`), validated against `data/base_cases.jsonl` and `data/documents/` via [`validate_regression_cases()`](../evaluation/dataset.py).
+1. **Inherited Regression Baseline Seed (`data/regression_cases.jsonl`):** Contains **40 canonical base cases (`BASE-001`–`BASE-040`: `32` answerable + `8` unanswerable across `DOC-001`–`DOC-008`)** whose ground-truth `question`, `expected_answer`, `expected_evidence`, `should_abstain`, and verification provenance (`source_base_verified_by="sayanpal1499"`, `source_base_verified_on="2026-10-12"`) are **inherited directly from [`data/base_cases.jsonl`](../data/base_cases.jsonl)** (`status="inherited_from_base_case"`, `verification_source="inherited_from_base_case"`, `baseline_source="canonical_base_case_seed"`, `verified_by=null`, `verified_on=null`), validated via [`validate_regression_cases()`](../evaluation/dataset.py). They were not independently re-verified as a separate dataset and have not yet been frozen from a live `grounded_v1` evaluation run.
 2. **Three-Run Uncached Noise-Floor Procedure (`run_noise_floor_experiment`):** Runs all frozen baseline cases `num_runs=3` times with `bypass_cache=True, temperature=0.0, seed=42` under `grounded_v1`, recording `per_run_accuracy`, `answer_flip_rate`, and marking any case with `pass_count < 3` as `flaky` (`INSTABILITY_RULE`).
 3. **Head-to-Head Comparison of `grounded_v2` vs. `grounded_v2_bad` (`compare_grounded_v2_vs_bad`):**
    - Evaluates candidate prompt `grounded_v2` (enhanced false-premise, conflict-reporting, and attribute-entailment instructions) and planted negative-control prompt `grounded_v2_bad` (gate disabled, forced guessing, no abstention) against `grounded_v1` while excluding `flaky_ids` from strict regression counting (`FLAKY_EXCLUDED`).
@@ -625,8 +629,8 @@ Because the Evidence-Quote Gate deterministically overrides `confidence = GATE_F
 
 1. **Synthetic Domain Corpus:** The 8 source documents (`DOC-001`–`DOC-008`) are synthetic technical, legal, clinical, maritime, and cloud specifications designed to eliminate pretraining memorization. Real-world OCR-degraded PDFs, multi-page financial tables, and cross-document retrieval introduce layout noise not present in clean UTF-8 text.
 2. **In-Sample Rule-Development Audit Set & Layer-2 Deferrals:** The 45 audit claims in `data/audit_claims.jsonl` were used during Layer-2 rule design and boundary review, making the `38/38` (`100.0%`) resolved-decision precision an **in-sample development metric** rather than a blind test result. Furthermore, Layer 2 defers `7/45` (`15.56%`) claims (`AUD-010`–`AUD-012` unit conversions, `AUD-039` bare single-digit guard, and `AUD-043`–`AUD-045` semantic inferences) to Layer 3 (`needs_judge`).
-3. **Provider Non-Determinism:** Neither Groq (`openai/gpt-oss-20b`) nor Gemini (`gemini-3.5-flash-lite`) guarantees bit-for-bit identical token generation across backend hardware updates even at `temperature=0.0, seed=42`. Reproducibility relies on SHA-256 disk caching (`.cache/llm_calls/`) and explicit 3-run noise-floor measurement.
-4. **Adversarial Variants in Draft Status (`100/100`) & Live Evaluation Not Yet Run:** While all 50 base cases, 40 regression baseline cases, and 45 audit claims are human-verified (`status: "verified"`), the 100 adversarial variants in `data/variants.jsonl` remain in `status: "draft"` (`VAR-001`–`VAR-020` reviewed in human batches 1–2; `VAR-021`–`VAR-100` consolidated in [`data/variants_final_review_checklist.md`](../data/variants_final_review_checklist.md)), and the live 144-LLM-call (`150` nominal) evaluation has not yet been executed.
+3. **Provider Non-Determinism:** Neither Groq (`openai/gpt-oss-20b`) nor Gemini (`gemini-3.5-flash-lite`) guarantees bit-for-bit identical token generation across backend hardware updates even at `temperature=0.0, seed=42`. Reproducibility relies on SHA-256 disk caching (`.cache/llm_responses/`) and explicit 3-run noise-floor measurement.
+4. **Adversarial Variants in Draft Status (`100/100`) & Full Live Evaluation Not Yet Run:** While all 50 base cases and 45 audit claims are human-verified (`status: "verified"`) and the 40 regression cases inherit their verified ground truth from `BASE-001`–`BASE-040` (`status: "inherited_from_base_case"`), the 100 adversarial variants in `data/variants.jsonl` remain in `status: "draft"` (`VAR-001`–`VAR-020` reviewed in human batches 1–2; `VAR-021`–`VAR-100` consolidated in [`data/variants_final_review_checklist.md`](../data/variants_final_review_checklist.md)), and the full live 144-LLM-call (`150` nominal) evaluation has not yet been executed (only `RUN-00-PREFLIGHT` model checks and 5 smoke tests were run live).
 {RESERVED_MULTI_HOP_SECTION}"""
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(content, encoding="utf-8")

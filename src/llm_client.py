@@ -11,9 +11,14 @@ import time
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 import httpx
+
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:  # pragma: no cover - allows offline test collection if google-genai is absent
+    genai = None  # type: ignore[assignment]
+    types = None  # type: ignore[assignment]
 
 # Load .env from repository root if present
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -463,6 +468,11 @@ def _call_gemini_api(
     max_output_tokens: int,
 ) -> dict[str, Any]:
     """Execute a content generation request against Google Gemini API via google-genai SDK."""
+    if genai is None or types is None:
+        raise LLMClientError(
+            "Missing 'google-genai' package required for Gemini API calls. "
+            "Install project dependencies via `pip install -r requirements.txt`."
+        )
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key or api_key == "your_gemini_api_key_here":
         raise LLMClientError("Missing or placeholder GEMINI_API_KEY in environment/.env.")

@@ -546,7 +546,7 @@ def test_runner_extracts_qatrace_and_scores_edge_cases() -> None:
 
 
 def test_canonical_regression_cases_validation_and_malformed_rejection(tmp_path: Path) -> None:
-    """Verify data/regression_cases.jsonl exists, passes strict validation, and rejects malformed/unverified rows."""
+    """Verify data/regression_cases.jsonl exists, preserves inherited base-case provenance, passes strict validation, and rejects malformed/unverified rows."""
     from evaluation.dataset import (
         load_documents,
         load_jsonl_base_cases,
@@ -559,6 +559,11 @@ def test_canonical_regression_cases_validation_and_malformed_rejection(tmp_path:
     bases = {b.id: b for b in load_jsonl_base_cases(Path("data/base_cases.jsonl"))}
     reg_cases = load_jsonl_regression_cases(Path("data/regression_cases.jsonl"))
     assert len(reg_cases) == 40
+    assert all(r.status == "inherited_from_base_case" for r in reg_cases)
+    assert all(r.verification_source == "inherited_from_base_case" for r in reg_cases)
+    assert all(r.verified_by is None and r.verified_on is None for r in reg_cases)
+    assert all(r.source_base_status == "verified" for r in reg_cases)
+    assert all(r.source_base_verified_by == "sayanpal1499" for r in reg_cases)
     answerable_n = sum(1 for r in reg_cases if not r.should_abstain)
     unanswerable_n = sum(1 for r in reg_cases if r.should_abstain)
     assert answerable_n == 32
@@ -566,7 +571,8 @@ def test_canonical_regression_cases_validation_and_malformed_rejection(tmp_path:
 
     summary = validate_regression_cases(reg_cases, bases, docs, require_verified=True)
     assert summary["total_regression_cases"] == 40
-    assert summary["verified_regression_cases"] == 40
+    assert summary["inherited_from_verified_base_cases"] == 40
+    assert summary["independently_verified_regression_cases"] == 0
 
     # Verify rejection of empty_malformed category in regression suite
     bad_case = RegressionCaseRecord(
@@ -578,16 +584,28 @@ def test_canonical_regression_cases_validation_and_malformed_rejection(tmp_path:
     with pytest.raises(DatasetValidationError, match="empty_malformed"):
         validate_regression_cases([bad_case], bases, docs, require_verified=True)
 
+    # Verify rejection when inherited_from_base_case falsely claims independent verified_by
+    falsely_claimed_case = RegressionCaseRecord(
+        **{
+            **reg_cases[0].model_dump(),
+            "verified_by": "sayanpal1499",
+            "verified_on": "2026-10-12",
+        }
+    )
+    with pytest.raises(DatasetValidationError, match="must be null"):
+        validate_regression_cases([falsely_claimed_case], bases, docs, require_verified=True)
+
     # Verify rejection of unverified regression case when require_verified=True
     draft_case = RegressionCaseRecord(
         **{
             **reg_cases[0].model_dump(),
             "status": "draft",
+            "verification_source": "unverified",
             "verified_by": None,
             "verified_on": None,
         }
     )
-    with pytest.raises(DatasetValidationError, match="requires 'verified'"):
+    with pytest.raises(DatasetValidationError, match="inherited_from_base_case"):
         validate_regression_cases([draft_case], bases, docs, require_verified=True)
 
 
@@ -866,4 +884,5 @@ def test_runner_cli_build_report_includes_reserved_multi_hop_and_audit_disclosur
     assert "GATE_FALLBACK_CONFIDENCE = 0.50" in content
     assert "in-sample" in content.lower()
     assert "38 / 38" in content or "38/38" in content
-
+    assert "inherited_from_base_case" in content
+    assert "llama-3.1-8b-instant" in content and "model_not_found" in content

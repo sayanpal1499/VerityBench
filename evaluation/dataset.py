@@ -526,8 +526,12 @@ def validate_regression_cases(
 
     seen_ids: set[str] = set()
     verified_count = 0
+    inherited_from_verified_base_count = 0
+    independently_verified_count = 0
     draft_count = 0
     by_category: dict[str, int] = {}
+    by_verification_source: dict[str, int] = {}
+    by_baseline_source: dict[str, int] = {}
     answerable_count = 0
     unanswerable_count = 0
 
@@ -547,6 +551,12 @@ def validate_regression_cases(
             )
 
         by_category[rec.category] = by_category.get(rec.category, 0) + 1
+        by_verification_source[rec.verification_source] = (
+            by_verification_source.get(rec.verification_source, 0) + 1
+        )
+        by_baseline_source[rec.baseline_source] = (
+            by_baseline_source.get(rec.baseline_source, 0) + 1
+        )
         if rec.should_abstain:
             unanswerable_count += 1
         else:
@@ -578,17 +588,46 @@ def validate_regression_cases(
                     errors.append(
                         f"Regression case {rec.case_id}: should_abstain does not match canonical base case."
                     )
+                if list(rec.expected_evidence) != list(src_base.expected_evidence):
+                    errors.append(
+                        f"Regression case {rec.case_id}: expected_evidence does not match canonical base case."
+                    )
                 if rec.document != documents[rec.document_id]:
                     errors.append(
                         f"Regression case {rec.case_id}: embedded document text does not match '{rec.document_id}'."
                     )
-                if src_base.status == "verified" and rec.status == "verified":
+                if (
+                    src_base.status == "verified"
+                    and rec.status == "inherited_from_base_case"
+                    and rec.verification_source == "inherited_from_base_case"
+                ):
+                    if rec.verified_by is not None or rec.verified_on is not None:
+                        errors.append(
+                            f"Regression case {rec.case_id}: status is 'inherited_from_base_case' "
+                            "so 'verified_by'/'verified_on' must be null (use 'source_base_verified_by' "
+                            "and 'source_base_verified_on' for inherited base-case provenance)."
+                        )
+                    inherited_from_verified_base_count += 1
+                    verified_count += 1
+                elif (
+                    src_base.status == "verified"
+                    and rec.status == "verified"
+                    and rec.verification_source == "independent_human_review"
+                ):
+                    if not rec.verified_by or not rec.verified_on:
+                        errors.append(
+                            f"Regression case {rec.case_id}: status is 'verified' (independent_human_review) "
+                            "but 'verified_by' or 'verified_on' is null."
+                        )
+                    independently_verified_count += 1
                     verified_count += 1
                 else:
                     draft_count += 1
                     if require_verified:
                         errors.append(
-                            f"Regression case {rec.case_id}: canonical status is '{src_base.status}' / record status is '{rec.status}'; requires 'verified'."
+                            f"Regression case {rec.case_id}: canonical status is '{src_base.status}' / "
+                            f"record status is '{rec.status}' (verification_source='{rec.verification_source}'); "
+                            "requires 'verified' or 'inherited_from_base_case' backed by a verified base case."
                         )
         else:
             src_var = variants_by_id.get(rec.case_id) if variants_by_id else None
@@ -602,6 +641,7 @@ def validate_regression_cases(
                         f"Regression case {rec.case_id}: expected_answer does not match canonical variant."
                     )
                 if src_var.status == "verified" and rec.status == "verified":
+                    independently_verified_count += 1
                     verified_count += 1
                 else:
                     draft_count += 1
@@ -610,7 +650,8 @@ def validate_regression_cases(
                             f"Regression case {rec.case_id}: canonical variant status is '{src_var.status}'; requires 'verified'."
                         )
             else:
-                if rec.status == "verified":
+                if rec.status == "verified" and rec.verified_by and rec.verified_on:
+                    independently_verified_count += 1
                     verified_count += 1
                 else:
                     draft_count += 1
@@ -641,10 +682,14 @@ def validate_regression_cases(
     return {
         "total_regression_cases": len(records),
         "verified_regression_cases": verified_count,
+        "inherited_from_verified_base_cases": inherited_from_verified_base_count,
+        "independently_verified_regression_cases": independently_verified_count,
         "draft_regression_cases": draft_count,
         "answerable_cases": answerable_count,
         "unanswerable_cases": unanswerable_count,
         "by_category": by_category,
+        "by_verification_source": by_verification_source,
+        "by_baseline_source": by_baseline_source,
     }
 
 
