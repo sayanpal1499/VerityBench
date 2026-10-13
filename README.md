@@ -10,6 +10,9 @@ VerityBench is a custom, zero-framework evaluation harness and adversarial bench
 6. **Failure Mode Clustering, Root-Cause Remediation & Causal Probes** (`evaluation/clustering.py`)
 7. **Prompt-Regression Testing (`grounded_v2` vs. `grounded_v2_bad`) & 3-Run Noise-Floor Estimation Harness** (`evaluation/regression.py`, `evaluation/runner.py` — fully implemented pipeline verified offline with synthetic mocks; live multi-run executions remain unrun/paused to preserve provider quotas)
 
+> [!NOTE]
+> **Reproducibility Note:** Reviewers can independently run the offline test suite and dataset validators without API credentials. Live benchmark reproduction requires separate provider credentials, human verification of all required dataset records, and available API quota. Historical metrics are reported with their original run provenance and are not guaranteed to reproduce identically.
+
 ---
 
 ## 1. Architecture & Design Decisions
