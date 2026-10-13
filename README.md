@@ -224,7 +224,9 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
 
 ---
 
-## 5. Summary of Offline Measured Results, Fake-LLM Dry Runs, Recorded Live Preflight API Results, and the Unrun Full Benchmark
+## 5. Evaluation Results: Scope and Limitations
+
+### 5.1 What Was Built & Verified Offline (Test Suite, Hallucination Rules & Preflight)
 
 1. **Synthetic / Fake-LLM Unit & Integration Test Suite (`pytest -v` — Offline Dry Runs):**
    - **69 / 69 passing (`100%`)** in `~4.2s` with zero network calls during `pytest`.
@@ -245,11 +247,26 @@ Once human sign-off authorizes promoting `data/variants.jsonl` from `"draft"` to
      - **`groq/qwen/qwen3.8-27b` (Alternative Groq Candidate):** Also verified available during live Groq preflight (`available: true`, `latency_ms=672.06`, `system_fingerprint="fp_424cb89518"`).
      - **`gemini/gemini-3.5-flash-lite` (Approved Fixed Independent Judge Model):** Verified available via live Gemini API request (`available: true`, `latency_ms=1831.32`, `response_json_schema=True`, `cached_replay_hit=True`).
      - **5 Live Smoke-Test Scenarios (`EX-1`–`EX-5`):** Executed live against `groq/openai/gpt-oss-20b` and cached in `.cache/llm_responses/` (`15` cached response files total).
-4. **Live Benchmark Status: Historical Results (`4458b2c305b31859`) vs. Current Dataset Governance (`211ca23296bb1612`):**
-   - **Historical Live Benchmark Run (Preserved in `results/`):** A full 150-case live evaluation was completed on `2026-10-13T10:45:41 UTC` against historical dataset snapshot hash `4458b2c305b31859` using `groq/openai/gpt-oss-20b` and `gemini/gemini-3.5-flash-lite`, producing the measured results in `results/metrics.json` (77.8% LLM-evaluated accuracy, 3.5% hallucination rate, 0.0064 ECE, 3 empirical failure clusters, and 218 responses in `.cache/llm_responses/`).
-   - **Current Canonical Dataset Status (Strict Gate Refusal):** On the current canonical dataset (`data/variants.jsonl`, hash `211ca23296bb1612`), Batches 1–2 (`VAR-001`–`VAR-020`) are human-verified, while Batches 3–10 (`VAR-021`–`VAR-100`, 80 variants) remain in `status: "draft"` pending final human sign-off. Consequently, `verify_all_records_before_run()` strictly blocks `python -m evaluation.runner --run-all` from running against the current dataset. The saved historical results are clearly documented as originating from snapshot `4458b2c305b31859` and are not claimed as a new run on the current draft dataset.
-5. **Live Experiment Status Disclosure (Noise Floor, Prompt Regression, Causal Probes):**
-   - **Offline Harness Verification:** The regression baseline dataset (`40` cases in `data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), noise-floor estimator, causal probes, and negative control prompt (`grounded_v2_bad`) are fully implemented and verified offline across the 69-test suite.
-   - **Unrun Live Execution:** Live multi-run experiments (`--run-noise-floor`, `--run-regression`, `--run-probes`) have **not** been executed against the live API to protect provider rate-limit quotas and remain blocked by the draft variant governance gate. They are strictly not claimed as completed live measurements.
+
+### 5.2 Evaluation Scope, Provenance & Methodological Limitations
+
+#### Historical Benchmark Results
+The reported benchmark metrics are from a historical evaluation run recorded on October 13, 2026, against dataset snapshot `4458b2c305b31859`. They describe that run and should not be interpreted as results from a fresh evaluation of the current dataset, whose hash is `211ca23296bb1612`.
+
+The current strict verification gate prevents a full benchmark run while draft dataset variants remain unverified. This is intentional: records are not promoted to verified status without the required review.
+
+#### Ablation Results
+The historical comparison between `grounded_v1` and `naive_v0` is confounded by 129 API/system-error fallbacks during the naive run. Consequently, the reported accuracy difference of `+50.0 percentage points` should not be interpreted as a causal estimate of the evidence gate's effectiveness. A controlled comparison with comparable API reliability and fresh, uncached runs is still needed.
+
+#### Calibration Metrics
+The reported operational ECE (`0.0064`, N=144) and intrinsic raw-model ECE (`0.0082`, N=112) are calculated over different populations. They serve different analytical purposes and should not be directly compared as equivalent measures. Low ECE values alone do not establish that the underlying model is reliably calibrated.
+
+#### Hallucination Audit
+The 45-claim audit is an in-sample rule-development evaluation, not an independent blind test set. The reported agreement of 42/45 and Cohen's kappa of 0.90 describe performance on this audit set; they do not establish generalization to unseen claims.
+
+#### Dataset and Regression Provenance
+The current dataset contains 50 verified base cases, 20 verified adversarial variants, and 80 draft variants awaiting review. The 40 regression cases inherit ground truth from the verified base cases; they have not been independently reviewed as a separate frozen-output benchmark.
+
+Live noise-floor, causal-probe, and prompt-regression experiments have not yet been completed on the full, human-verified dataset. These remain future evaluation work.
 
 See [`reports/evaluation_report.md`](reports/evaluation_report.md) for the complete technical report, methodology, pre-run failure hypotheses, calibration equations, regression workflow, and the reserved 11th adversarial category (`multi_hop_conditional`).
