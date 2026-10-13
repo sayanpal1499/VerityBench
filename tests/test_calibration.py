@@ -197,3 +197,60 @@ def test_confidence_provenance_and_single_bin_isolation_on_saved_records() -> No
     assert non_empty_bins[0]["bin_range"] == "[0.9, 1.0]"
     assert non_empty_bins[0]["count"] == 112
     assert non_empty_bins[0]["accuracy"] == 1.0
+
+
+def test_calibration_retains_genuine_zero_confidence_model_predictions() -> None:
+    """Genuine model predictions with confidence 0.0 must be retained in intrinsic calibration,
+
+    while explicit infrastructure/API fallbacks must be excluded.
+    """
+    records = [
+        # 1. Genuine model prediction with confidence 0.0 (e.g. model voluntarily expressed complete uncertainty)
+        {
+            "case_id": "BASE-010",
+            "category": "base",
+            "confidence": 0.0,
+            "raw_confidence": 0.0,
+            "is_correct": False,
+            "raw_is_correct": False,
+            "abstained": False,
+            "should_abstain": False,
+            "is_infrastructure_error": False,
+        },
+        # 2. Genuine correct model prediction with high confidence
+        {
+            "case_id": "BASE-011",
+            "category": "base",
+            "confidence": 0.95,
+            "raw_confidence": 0.95,
+            "is_correct": True,
+            "raw_is_correct": True,
+            "abstained": False,
+            "should_abstain": False,
+            "is_infrastructure_error": False,
+        },
+        # 3. Explicit infrastructure error fallback (HTTP 429 rate limit or HTTP 500)
+        {
+            "case_id": "BASE-012",
+            "category": "base",
+            "confidence": 0.0,
+            "raw_confidence": 0.0,
+            "is_correct": False,
+            "raw_is_correct": False,
+            "abstained": True,
+            "should_abstain": False,
+            "is_infrastructure_error": True,
+            "answer": "System Error Abstention: API failure: Groq HTTP 429 rate limit",
+        },
+    ]
+
+    report = compute_full_calibration_report(records, seed=42)
+    assert report["evaluated_records_n"] == 3
+    assert report["api_fallback_records_n"] == 1
+    assert report["valid_model_records_n"] == 2
+
+    raw_cal = report["intrinsic_raw_model_calibration"]
+    assert raw_cal["total_samples"] == 2
+    assert raw_cal["bins"][0]["count"] == 1
+    assert raw_cal["bins"][0]["bin_range"] == "[0.0, 0.1)"
+    assert raw_cal["bins"][9]["count"] == 1

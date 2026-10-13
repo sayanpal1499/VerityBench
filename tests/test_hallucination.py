@@ -231,3 +231,36 @@ def test_audit_claims_benchmark_offline_and_allow_llm_judge_false() -> None:
     assert offline_eval["needs_judge_claims"] == 1
     assert offline_eval["unresolved_needs_judge_claims"] == 1
 
+
+def test_claim_splitting_honorifics_and_multi_numerical_evidence() -> None:
+    """Regression test: claim splitting preserves honorific titles and Layer 2 avoids false numeric contradictions."""
+    from evaluation.hallucination import split_into_atomic_claims_deterministic
+
+    # 1. Honorific titles (Dr., Prof., etc.) must not split mid-name
+    text_with_honorific = (
+        "The certification was granted by Dr. Maren Lindqvist after testing. "
+        "Prof. Eleanor Vance verified the second phase."
+    )
+    claims = split_into_atomic_claims_deterministic(text_with_honorific)
+    assert len(claims) == 2
+    assert "Dr. Maren Lindqvist" in claims[0]
+    assert "Prof. Eleanor Vance" in claims[1]
+
+    # 2. Multi-tier numerical document: tier-specific numbers must not be falsely contradicted by earlier tiers
+    doc_multi_tier = (
+        "Standard Merchant Tier: 120 RPM / 25 burst ceiling.\n"
+        "Enterprise Clearing Tier: 900 RPM / 150 burst ceiling."
+    )
+    claim_enterprise = "The Enterprise Clearing Tier has a rate limit of 900 RPM and a burst ceiling of 150."
+    res_enterprise = check_layer2_entity_value_consistency(claim_enterprise, doc_multi_tier)
+    assert res_enterprise["verdict"] != "contradicted"
+
+    # 3. Multi-condition numerical facts spanning sentences: should not be falsely contradicted
+    doc_multi_cure = (
+        "Under Section 8.2, cure period for material non-payment breach is 45 calendar days. "
+        "Operational non-financial breaches require a 60 calendar day cure period."
+    )
+    claim_both_cures = "The cure period for non-payment is 45 days, while operational breach is 60 days."
+    res_both_cures = check_layer2_entity_value_consistency(claim_both_cures, doc_multi_cure)
+    assert res_both_cures["verdict"] != "contradicted"
+

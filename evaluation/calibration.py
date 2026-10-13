@@ -202,12 +202,27 @@ def compute_full_calibration_report(
     eval_records = [r for r in scored_records if r.get("category") != "empty_malformed"]
     excluded_pre_api = len(scored_records) - len(eval_records)
 
+    # Disaggregate genuine model completions from API token-exhaustion and infrastructure error fallbacks
+    # Genuine model predictions with confidence 0.0 are NEVER excluded; only explicit infrastructure fallbacks are.
+    api_fallback_records = [
+        r
+        for r in eval_records
+        if r.get("error_fallback", False)
+        or r.get("is_infrastructure_error", False)
+        or (outputs_by_id and outputs_by_id.get(r["case_id"], {}).get("answer", "").startswith("System Error Abstention:"))
+        or (r.get("answer") and str(r.get("answer")).startswith("System Error Abstention:"))
+    ]
+    valid_model_records = [r for r in eval_records if r not in api_fallback_records]
+
     post_confs = [float(r["confidence"]) for r in eval_records]
     post_corrs = [1 if r["is_correct"] else 0 for r in eval_records]
 
-    raw_confs = [float(r.get("raw_confidence", r["confidence"])) for r in eval_records]
+    # Intrinsic raw model confidences evaluate ONLY genuine completed model responses (excluding infrastructure error fallbacks)
+    raw_confs = [
+        float(r.get("raw_confidence", r["confidence"])) for r in valid_model_records
+    ]
     raw_corrs = [
-        1 if r.get("raw_is_correct", r["is_correct"]) else 0 for r in eval_records
+        1 if r.get("raw_is_correct", r["is_correct"]) else 0 for r in valid_model_records
     ]
 
     gate_overridden = [r for r in eval_records if r.get("gate_triggered", False)]
@@ -215,17 +230,6 @@ def compute_full_calibration_report(
 
     answered_records = [r for r in eval_records if not r.get("abstained", False)]
     abstained_records = [r for r in eval_records if r.get("abstained", False)]
-
-    # Disaggregate genuine model completions from API token-exhaustion error fallbacks
-    api_fallback_records = [
-        r
-        for r in eval_records
-        if r.get("error_fallback", False)
-        or (outputs_by_id and outputs_by_id.get(r["case_id"], {}).get("answer", "").startswith("System Error Abstention:"))
-        or (r.get("answer") and str(r.get("answer")).startswith("System Error Abstention:"))
-        or (float(r.get("confidence", 0.0)) == 0.0 and r.get("abstained", False) and not r.get("should_abstain", False))
-    ]
-    valid_model_records = [r for r in eval_records if r not in api_fallback_records]
 
     conf_provenance = {
         "model_generated_count": len(valid_model_records),

@@ -292,6 +292,7 @@ def answer_question(
 
     llm_metadata: dict[str, Any] = {}
     error_msg: Optional[str] = None
+    error_category: Optional[str] = None
     raw_output: Optional[QAOutput] = None
 
     try:
@@ -304,7 +305,7 @@ def answer_question(
             prompt_version=prompt_version,
             json_mode=True,
             response_schema=QAOutput.model_json_schema(),
-            max_output_tokens=512,
+            max_output_tokens=768,
             bypass_cache=bypass_cache,
             cache_dir=cache_dir,
         )
@@ -316,7 +317,7 @@ def answer_question(
             repair_prompt = (
                 f"{user_prompt}\n\n"
                 "IMPORTANT: Your previous output was not valid JSON matching the schema. "
-                "Return ONLY a valid JSON object with keys: "
+                "Return ONLY a valid JSON object starting with {{ and ending with }}. Keys required: "
                 "\"answer\" (str), \"evidence\" (list of str), \"confidence\" (float 0..1), "
                 "\"abstained\" (bool)."
             )
@@ -329,7 +330,7 @@ def answer_question(
                 prompt_version=f"{prompt_version}_json_retry",
                 json_mode=True,
                 response_schema=QAOutput.model_json_schema(),
-                max_output_tokens=512,
+                max_output_tokens=768,
                 bypass_cache=bypass_cache,
                 cache_dir=cache_dir,
             )
@@ -339,8 +340,10 @@ def answer_question(
                 raw_output = _parse_qa_output(retry_resp["text"])
             except Exception as second_err:
                 error_msg = f"Malformed JSON after 1 retry: { parse_err } | { second_err }"
+                error_category = "schema_validation_error"
     except LLMClientError as api_err:
         error_msg = f"API failure: {api_err}"
+        error_category = getattr(api_err, "error_category", "infrastructure_error")
 
     if raw_output is None:
         # Clear structured error fallback (never crash on malformed JSON or API error)
@@ -350,6 +353,7 @@ def answer_question(
             confidence=0.0,
             abstained=True,
         )
+        is_infra = bool(error_category in ("rate_limit", "provider_server_error", "connection_timeout", "infrastructure_error"))
         trace = QATrace(
             prompt_version=prompt_version,
             raw_output=fallback,
@@ -360,6 +364,8 @@ def answer_question(
             quote_checks=[],
             fuzzy_candidate_count=0,
             error=error_msg,
+            error_category=error_category,
+            is_infrastructure_error=is_infra,
             llm_metadata=llm_metadata,
         )
         fallback._trace = trace

@@ -45,10 +45,70 @@ class LLMClientError(Exception):
         message: str,
         retry_after_sec: Optional[float] = None,
         rate_headers: Optional[dict[str, str]] = None,
+        error_category: str = "infrastructure_error",
     ) -> None:
         super().__init__(message)
         self.retry_after_sec = retry_after_sec
         self.rate_headers = rate_headers or {}
+        self.error_category = error_category
+
+
+class RateLimitError(LLMClientError):
+    """Raised when provider returns HTTP 429 or resource exhaustion."""
+
+    def __init__(
+        self,
+        message: str,
+        retry_after_sec: Optional[float] = None,
+        rate_headers: Optional[dict[str, str]] = None,
+    ) -> None:
+        super().__init__(
+            message,
+            retry_after_sec=retry_after_sec,
+            rate_headers=rate_headers,
+            error_category="rate_limit",
+        )
+
+
+class JsonValidateError(LLMClientError):
+    """Raised when provider returns HTTP 400 json_validate_failed."""
+
+    def __init__(
+        self,
+        message: str,
+        retry_after_sec: Optional[float] = None,
+        rate_headers: Optional[dict[str, str]] = None,
+    ) -> None:
+        super().__init__(
+            message,
+            retry_after_sec=retry_after_sec,
+            rate_headers=rate_headers,
+            error_category="json_validate_failed",
+        )
+
+
+class ProviderServerError(LLMClientError):
+    """Raised on provider HTTP 5xx errors."""
+
+    def __init__(
+        self,
+        message: str,
+        retry_after_sec: Optional[float] = None,
+        rate_headers: Optional[dict[str, str]] = None,
+    ) -> None:
+        super().__init__(
+            message,
+            retry_after_sec=retry_after_sec,
+            rate_headers=rate_headers,
+            error_category="provider_server_error",
+        )
+
+
+class ConnectionTimeoutError(LLMClientError):
+    """Raised on connection timeout or network disconnect."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, error_category="connection_timeout")
 
 
 class _AdaptiveRateLimiter:
@@ -328,6 +388,7 @@ def call_llm(
 
     retry_count = 0
     last_error_msg = ""
+    current_max_output_tokens = max_output_tokens
 
     for attempt in range(max_retries + 1):
         start_t = time.perf_counter()
@@ -340,7 +401,7 @@ def call_llm(
                     temperature=temperature,
                     seed=seed,
                     json_mode=json_mode,
-                    max_output_tokens=max_output_tokens,
+                    max_output_tokens=current_max_output_tokens,
                 )
             elif provider == "gemini":
                 result = _call_gemini_api(
@@ -351,7 +412,7 @@ def call_llm(
                     seed=seed,
                     json_mode=json_mode,
                     response_schema=response_schema,
-                    max_output_tokens=max_output_tokens,
+                    max_output_tokens=current_max_output_tokens,
                 )
             else:
                 raise LLMClientError(f"Unsupported provider '{provider}'.")
@@ -389,7 +450,7 @@ def call_llm(
                     "temperature": temperature,
                     "seed": seed,
                     "json_mode": json_mode,
-                    "max_output_tokens": max_output_tokens,
+                    "max_output_tokens": current_max_output_tokens,
                 },
                 "parameters_supported": result.get("parameters_supported", {}),
                 "parameters_unsupported": result.get("parameters_unsupported", []),
@@ -399,31 +460,53 @@ def call_llm(
             }
 
             to_save = {"text": result["text"], "metadata": metadata}
-            cache_path.write_text(
+            # Atomic cache write to prevent partial/corrupted files if interrupted
+            tmp_cache_path = cache_path.with_suffix(".tmp")
+            tmp_cache_path.write_text(
                 json.dumps(to_save, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            tmp_cache_path.replace(cache_path)
             return to_save
 
         except Exception as exc:
             last_error_msg = _sanitize_secrets(str(exc))
-            is_retryable = any(
-                token in last_error_msg.lower()
-                for token in ("429", "rate limit", "resource_exhausted", "500", "502", "503", "504", "timeout", "connection")
+            is_json_truncation = isinstance(exc, JsonValidateError) or "json_validate_failed" in last_error_msg.lower()
+            is_retryable = (
+                isinstance(exc, (RateLimitError, ProviderServerError, ConnectionTimeoutError))
+                or is_json_truncation
+                or any(
+                    token in last_error_msg.lower()
+                    for token in ("429", "rate limit", "resource_exhausted", "500", "502", "503", "504", "timeout", "connection")
+                )
             )
+
             if attempt < max_retries and is_retryable:
                 retry_count += 1
-                explicit_retry = getattr(exc, "retry_after_sec", None)
-                if explicit_retry is None or explicit_retry <= 0:
-                    explicit_retry = _extract_retry_after_seconds(last_error_msg)
-
-                if explicit_retry is not None and explicit_retry > 0:
-                    backoff_s = min(65.0, explicit_retry + random.uniform(0.15, 0.40))
+                if is_json_truncation:
+                    # Dynamically expand output token ceiling if token limit truncated JSON
+                    current_max_output_tokens = min(2048, max(current_max_output_tokens * 2, 1024))
+                    backoff_s = random.uniform(0.5, 1.5)
                 else:
-                    backoff_s = min(60.0, (4.0 * (2.0 ** (attempt))) + random.uniform(0.5, 2.0))
+                    explicit_retry = getattr(exc, "retry_after_sec", None)
+                    if explicit_retry is None or explicit_retry <= 0:
+                        explicit_retry = _extract_retry_after_seconds(last_error_msg)
+
+                    if explicit_retry is not None and explicit_retry > 0:
+                        backoff_s = min(65.0, explicit_retry + random.uniform(0.15, 0.40))
+                    else:
+                        backoff_s = min(60.0, (4.0 * (2.0 ** (attempt))) + random.uniform(0.5, 2.0))
                 time.sleep(backoff_s)
                 continue
             break
 
+    if "rate" in last_error_msg.lower() or "429" in last_error_msg:
+        raise RateLimitError(
+            f"LLM call failed for {provider}/{model_id} after {retry_count} retries: {last_error_msg}"
+        )
+    if "json_validate_failed" in last_error_msg.lower():
+        raise JsonValidateError(
+            f"LLM call failed for {provider}/{model_id} after {retry_count} retries: {last_error_msg}"
+        )
     raise LLMClientError(
         f"LLM call failed for {provider}/{model_id} after {retry_count} retries: {last_error_msg}"
     )
@@ -470,12 +553,15 @@ def _call_groq_api(
         "Content-Type": "application/json",
     }
 
-    with httpx.Client(timeout=60.0) as client:
-        response = client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-        )
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+    except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+        raise ConnectionTimeoutError(f"Groq network/timeout error: {net_err}")
 
     raw_headers = dict(response.headers)
     rate_headers = {
@@ -499,10 +585,28 @@ def _call_groq_api(
         if retry_after_val is None or retry_after_val <= 0:
             retry_after_val = _extract_retry_after_seconds(response.text)
 
+        sanitized_resp = _sanitize_secrets(response.text[:500])
         if response.status_code == 429:
             _RATE_LIMITER.record_call("groq", 0, raw_headers=raw_headers)
+            raise RateLimitError(
+                f"Groq HTTP 429: {sanitized_resp}",
+                retry_after_sec=retry_after_val,
+                rate_headers=rate_headers,
+            )
+        if response.status_code == 400 and ("json_validate_failed" in response.text or "failed_generation" in response.text):
+            raise JsonValidateError(
+                f"Groq HTTP 400: {sanitized_resp}",
+                retry_after_sec=retry_after_val,
+                rate_headers=rate_headers,
+            )
+        if response.status_code >= 500:
+            raise ProviderServerError(
+                f"Groq HTTP {response.status_code}: {sanitized_resp}",
+                retry_after_sec=retry_after_val,
+                rate_headers=rate_headers,
+            )
         raise LLMClientError(
-            f"Groq HTTP {response.status_code}: {_sanitize_secrets(response.text[:500])}",
+            f"Groq HTTP {response.status_code}: {sanitized_resp}",
             retry_after_sec=retry_after_val,
             rate_headers=rate_headers,
         )

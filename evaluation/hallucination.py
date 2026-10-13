@@ -156,12 +156,23 @@ def _has_negation_polarity(text: str) -> bool:
     return any(neg in lower for neg in NEGATION_WORDS)
 
 
+ABBREVIATION_PATTERN = re.compile(
+    r"\b(Dr|Mr|Ms|Mrs|Prof|Sr|Jr|vs|etc|Fig|Sec|No|Rev|Inc|Ltd|corp|dept|approx|est)\.\s+",
+    re.IGNORECASE,
+)
+
+
 def split_into_atomic_claims_deterministic(answer_text: str) -> list[str]:
     """Split a substantive answer into sentence-level atomic claims for Layer-2 inspection."""
     cleaned = normalize_text_for_quote_match(answer_text)
     if not cleaned:
         return []
-    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|;\s+", cleaned) if p.strip()]
+    masked = ABBREVIATION_PATTERN.sub(r"\1__DOT__ ", cleaned)
+    parts = [
+        p.replace("__DOT__ ", ". ").strip()
+        for p in re.split(r"(?<=[.!?])\s+|;\s+", masked)
+        if p.strip()
+    ]
     return parts if parts else [cleaned]
 
 
@@ -243,10 +254,12 @@ def check_layer2_entity_value_consistency(
     doc_lower = norm_doc.lower()
 
     # Split on raw newlines and sentence boundaries BEFORE normalizing whitespace
-    # so bullet lines and headers are never merged into a single sentence.
+    # while protecting abbreviations and titles (e.g. Dr., Prof., Sec.)
+    masked_doc = ABBREVIATION_PATTERN.sub(r"\1__DOT__ ", document)
+    raw_sents = re.split(r"(?<=[.!?])\s+|\n+", masked_doc)
     doc_sentences = [
-        normalize_text_for_quote_match(s.strip())
-        for s in re.split(r"(?<=[.!?])\s+|\n+", document)
+        normalize_text_for_quote_match(s.replace("__DOT__ ", ". ").strip())
+        for s in raw_sents
         if len(s.strip()) >= 5
     ]
 
@@ -263,7 +276,22 @@ def check_layer2_entity_value_consistency(
         s for s in doc_sentences if _sentence_compatible_with_entities(s, claim_entities)
     ]
 
-    # 1. Check if any numeric value in the claim is completely absent from the document
+    # 1. Direct substring / clause match across all document sentences FIRST
+    for sent in doc_sentences:
+        sent_lower = sent.lower()
+        stripped_claim = claim_lower.rstrip(".")
+        if len(stripped_claim) >= 12 and stripped_claim in sent_lower:
+            return {
+                "claim_text": claim_text,
+                "verdict": "supported",
+                "evidence_quote": sent,
+                "deciding_layer": "layer2_deterministic",
+                "is_deterministic": True,
+                "evaluator_version": HALLUCINATION_EVALUATOR_VERSION,
+                "reason": "Claim is a direct verbatim clause of a source document sentence.",
+            }
+
+    # 2. Check if any numeric value in the claim is completely absent from the document
     #    (even after accounting for standard unit conversion equivalents like 42 mA <-> 0.042 A)
     for num in claim_nums:
         equivs = _equivalent_numeric_forms(num)
@@ -305,7 +333,7 @@ def check_layer2_entity_value_consistency(
                 ),
             }
 
-    # 2. Wrong-entity value trap: check if a number in the claim appears in topical sentences
+    # 3. Wrong-entity value trap: check if a number in the claim appears in topical sentences
     #    belonging ONLY to a competing sibling entity (e.g., Helios-X7's 95 mA attributed to Helios-X9,
     #    IceCube's 2,450 meters attributed to SSNA, or Tier-1's 90-second lag attributed to Tier-0)
     if claim_nums and claim_entities:
@@ -350,21 +378,36 @@ def check_layer2_entity_value_consistency(
                         ),
                     }
 
-    # 3. Direct substring / clause match, sentence-level numeric conflict, and polarity check
+    # 4. Check if a supporting sentence exists in the document for all numbers
+    has_supporting_sentence = False
+    if claim_nums:
+        for s in candidate_sents:
+            s_nums = _extract_numbers(s.lower())
+            s_words = {w for w in re.findall(r"[a-z]{3,}", s.lower()) if w not in LAYER2_STOPWORDS}
+            shared_s = claim_words & s_words
+            overlap_s = len(shared_s) / max(1, len(claim_words))
+            if set(claim_nums).issubset(set(s_nums)) and len(shared_s) >= 3 and overlap_s >= 0.45:
+                has_supporting_sentence = True
+                break
+        if not has_supporting_sentence and len(claim_nums) > 1:
+            all_nums_covered = True
+            for num in claim_nums:
+                num_covered = False
+                for s in candidate_sents:
+                    s_nums = _extract_numbers(s.lower())
+                    s_words = {w for w in re.findall(r"[a-z]{3,}", s.lower()) if w not in LAYER2_STOPWORDS}
+                    if num in s_nums and len(claim_words & s_words) >= 2:
+                        num_covered = True
+                        break
+                if not num_covered:
+                    all_nums_covered = False
+                    break
+            if all_nums_covered:
+                has_supporting_sentence = True
+
+    # 5. Sentence-level numeric conflict and polarity check
     for sent in doc_sentences:
         sent_lower = sent.lower()
-        stripped_claim = claim_lower.rstrip(".")
-        if len(stripped_claim) >= 12 and stripped_claim in sent_lower:
-            return {
-                "claim_text": claim_text,
-                "verdict": "supported",
-                "evidence_quote": sent,
-                "deciding_layer": "layer2_deterministic",
-                "is_deterministic": True,
-                "evaluator_version": HALLUCINATION_EVALUATOR_VERSION,
-                "reason": "Claim is a direct verbatim clause of a source document sentence.",
-            }
-
         sent_nums = _extract_numbers(sent_lower)
         sent_words = {
             w
@@ -378,9 +421,10 @@ def check_layer2_entity_value_consistency(
 
         # If a compatible sentence matches the specific attribute words (>=4 shared and >=55% overlap)
         # and contains numbers, but the claim states a non-equivalent number from elsewhere in the doc,
-        # flag as contradicted.
+        # flag as contradicted only if no other compatible sentence in the document supports the claim's numbers.
         if (
-            ents_compatible
+            not has_supporting_sentence
+            and ents_compatible
             and claim_nums
             and sent_nums
             and not nums_subset
@@ -432,7 +476,7 @@ def check_layer2_entity_value_consistency(
                     "reason": "Claim matches single source sentence entities, numbers, polarity, and content words (>=80% overlap).",
                 }
 
-    # 4. Conservative fallback: whenever a claim is paraphrased, converts units, combines
+    # 6. Conservative fallback: whenever a claim is paraphrased, converts units, combines
     #    multiple sentences, or lacks a high-confidence single-sentence match, defer to Layer 3 LLM Judge.
     return {
         "claim_text": claim_text,

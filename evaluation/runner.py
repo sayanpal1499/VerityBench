@@ -60,6 +60,10 @@ from src.qa_system import GATE_FALLBACK_CONFIDENCE, InputValidationError, answer
 from src.schemas import BaseCaseRecord, QAOutput, VariantRecord
 
 
+class CircuitBreakerError(RuntimeError):
+    """Raised when consecutive infrastructure errors or overall error rate exceeds tolerance."""
+
+
 def verify_all_records_before_run(
     base_cases_path: Path | str = Path("data/base_cases.jsonl"),
     variants_path: Path | str = Path("data/variants.jsonl"),
@@ -111,14 +115,20 @@ def run_qa_suite_for_prompt(
     judge_model_id: str = "gemini/gemini-3.5-flash-lite",
     bypass_cache: bool = False,
     qa_runner_fn: Optional[Callable[..., QAOutput]] = None,
+    max_consecutive_errors: int = 5,
+    max_error_rate: float = 0.15,
+    min_attempts_before_rate_check: int = 10,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    """Run QA system, scorer, and 3-layer hallucination detector across all verified records."""
+    """Run QA system, scorer, and 3-layer hallucination detector across records with circuit breaker."""
     runner = qa_runner_fn or answer_question
     base_by_id = {b.id: b for b in base_cases}
 
     outputs: list[dict[str, Any]] = []
     scored_records: list[dict[str, Any]] = []
     claim_records: list[dict[str, Any]] = []
+
+    infra_error_count = 0
+    consecutive_infra_errors = 0
 
     all_items: list[BaseCaseRecord | VariantRecord] = [*base_cases, *variants]
     for idx, item in enumerate(all_items):
@@ -156,6 +166,32 @@ def run_qa_suite_for_prompt(
             )
 
         trace = getattr(qa_out, "_trace", None)
+        is_infra_error = bool(getattr(trace, "is_infrastructure_error", False))
+        error_category = getattr(trace, "error_category", None)
+        error_msg = getattr(trace, "error", None)
+
+        if is_infra_error:
+            infra_error_count += 1
+            consecutive_infra_errors += 1
+        else:
+            consecutive_infra_errors = 0
+
+        # Enforce API circuit breaker
+        if consecutive_infra_errors >= max_consecutive_errors:
+            raise CircuitBreakerError(
+                f"Circuit breaker tripped: {consecutive_infra_errors} consecutive infrastructure "
+                f"errors encountered at case {cid} ({error_category}: {error_msg}). "
+                f"Halting evaluation to protect provider quota."
+            )
+        if (idx + 1) >= min_attempts_before_rate_check:
+            current_rate = infra_error_count / (idx + 1)
+            if current_rate > max_error_rate:
+                raise CircuitBreakerError(
+                    f"Circuit breaker tripped: Infrastructure error rate {current_rate:.1%} "
+                    f"({infra_error_count}/{idx + 1}) exceeds {max_error_rate:.1%} tolerance threshold. "
+                    f"Halting evaluation."
+                )
+
         gate_triggered = bool(
             getattr(trace, "gate_triggered", getattr(qa_out, "gate_triggered", False))
         )
@@ -176,6 +212,7 @@ def run_qa_suite_for_prompt(
             else getattr(qa_out, "raw_abstained", qa_out.abstained)
         )
 
+        cache_hit = bool(getattr(getattr(qa_out, "_trace", None), "llm_metadata", {}).get("cache_hit", False))
         out_row = {
             "case_id": cid,
             "base_id": base_id,
@@ -192,6 +229,9 @@ def run_qa_suite_for_prompt(
             "raw_answer": raw_answer,
             "raw_confidence": raw_confidence,
             "raw_abstained": raw_abstained,
+            "is_infrastructure_error": is_infra_error,
+            "error_category": error_category,
+            "cache_hit": cache_hit,
         }
         outputs.append(out_row)
 
@@ -219,6 +259,8 @@ def run_qa_suite_for_prompt(
         scored["gate_triggered"] = gate_triggered
         scored["raw_confidence"] = raw_confidence
         scored["raw_is_correct"] = raw_is_correct
+        scored["is_infrastructure_error"] = is_infra_error
+        scored["error_category"] = error_category
         scored_records.append(scored)
 
         hall = evaluate_output_hallucinations(
@@ -373,6 +415,126 @@ def execute_verified_evaluation(
     }
     _write_json(out_dir / "metrics.json", metrics_payload)
     return metrics_payload
+
+
+def run_smoke_test(
+    num_cases: int = 5,
+    base_cases_path: Path | str = Path("data/base_cases.jsonl"),
+    docs_dir: Path | str = Path("data/documents"),
+    model_id: str = "groq/openai/gpt-oss-20b",
+    judge_model_id: str = "gemini/gemini-3.5-flash-lite",
+    bypass_cache: bool = False,
+    qa_runner_fn: Optional[Callable[..., QAOutput]] = None,
+) -> dict[str, Any]:
+    """Run a small smoke test using already-verified base cases.
+
+    Reports:
+    - Valid outputs
+    - API infrastructure errors
+    - Schema validation failures
+    - Evidence-quote gate triggers
+    - Halts immediately if circuit breaker trips or critical errors occur.
+    """
+    base_cases = load_jsonl_base_cases(Path(base_cases_path))
+    docs = load_documents(Path(docs_dir))
+
+    # Select verified base cases only
+    verified_cases = [b for b in base_cases if b.status == "verified"][:num_cases]
+    if not verified_cases:
+        raise ValueError("No verified base cases available for smoke testing.")
+
+    results: dict[str, Any] = {
+        "num_cases": len(verified_cases),
+        "case_ids": [c.id for c in verified_cases],
+        "prompt_runs": {},
+    }
+
+    for prompt_ver in ("grounded_v1", "naive_v0"):
+        print(f"\n--- Smoke Testing {prompt_ver} ({len(verified_cases)} cases) ---", flush=True)
+        try:
+            outputs, scored, claims = run_qa_suite_for_prompt(
+                base_cases=verified_cases,
+                variants=[],
+                documents=docs,
+                prompt_version=prompt_ver,
+                model_id=model_id,
+                judge_model_id=judge_model_id,
+                bypass_cache=bypass_cache,
+                qa_runner_fn=qa_runner_fn,
+                max_consecutive_errors=3,
+                max_error_rate=0.40,
+                min_attempts_before_rate_check=3,
+            )
+
+            valid_outputs = 0
+            api_errors = 0
+            schema_failures = 0
+            gate_triggers = 0
+            correct_count = 0
+            live_calls = 0
+            cache_hits = 0
+            per_case_details = []
+
+            for o, s in zip(outputs, scored):
+                is_hit = bool(o.get("cache_hit", False))
+                c_status = "cache_hit" if is_hit else "fresh_live_call"
+                if is_hit:
+                    cache_hits += 1
+                else:
+                    live_calls += 1
+
+                if o.get("is_infrastructure_error"):
+                    api_errors += 1
+                elif o.get("error_category") == "schema_validation_error":
+                    schema_failures += 1
+                else:
+                    valid_outputs += 1
+
+                if s.get("gate_triggered"):
+                    gate_triggers += 1
+                if s.get("is_correct"):
+                    correct_count += 1
+
+                per_case_details.append({
+                    "case_id": o["case_id"],
+                    "cache_status": c_status,
+                    "provider": "groq",
+                    "model_id": model_id,
+                    "valid_output": not o.get("is_infrastructure_error") and o.get("error_category") != "schema_validation_error",
+                    "is_infrastructure_error": o.get("is_infrastructure_error", False),
+                    "error_category": o.get("error_category"),
+                    "answer": o.get("answer"),
+                    "expected_answer": o.get("expected_answer"),
+                    "is_correct": s.get("is_correct"),
+                })
+
+            results["prompt_runs"][prompt_ver] = {
+                "total": len(outputs),
+                "valid_outputs": valid_outputs,
+                "fresh_live_calls": live_calls,
+                "cache_hits": cache_hits,
+                "api_infrastructure_errors": api_errors,
+                "schema_validation_failures": schema_failures,
+                "gate_triggers": gate_triggers,
+                "correct": correct_count,
+                "per_case": per_case_details,
+                "status": "PASSED" if api_errors == 0 else "PARTIAL",
+            }
+            print(
+                f"[{prompt_ver}] Smoke test completed: {valid_outputs}/{len(outputs)} valid outputs, "
+                f"{live_calls} fresh live calls, {cache_hits} cache hits, "
+                f"{api_errors} API errors, {gate_triggers} gate triggers, {correct_count} correct.",
+                flush=True,
+            )
+        except CircuitBreakerError as cb_err:
+            results["prompt_runs"][prompt_ver] = {
+                "status": "CIRCUIT_BREAKER_TRIPPED",
+                "error": str(cb_err),
+            }
+            print(f"FAILED: {cb_err}", flush=True)
+            raise
+
+    return results
 
 
 RESERVED_MULTI_HOP_SECTION = """
@@ -1035,6 +1197,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Validate that all base cases, variants, and audit claims have status == 'verified'.",
     )
     parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Run a 5-case smoke test on verified base cases reporting valid outputs, API errors, and schema failures.",
+    )
+    parser.add_argument(
         "--run-all",
         action="store_true",
         help="Execute full evaluation suite (requires all records verified).",
@@ -1112,6 +1279,11 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("reports/figures"),
         help="Directory for saved evaluation figures",
     )
+    parser.add_argument(
+        "--bypass-cache",
+        action="store_true",
+        help="Bypass disk cache and force fresh live provider calls.",
+    )
     args = parser.parse_args(argv)
 
     if args.check_gate:
@@ -1124,6 +1296,17 @@ def main(argv: list[str] | None = None) -> int:
             f"VERIFICATION GATE PASSED: {len(base_cases)} base cases and "
             f"{len(variants)} variants verified."
         )
+        return 0
+
+    if args.smoke_test:
+        smoke_res = run_smoke_test(
+            num_cases=5,
+            base_cases_path=args.base_cases,
+            docs_dir=args.docs_dir,
+            bypass_cache=args.bypass_cache,
+        )
+        print("\nSmoke Test Summary:")
+        print(json.dumps({k: {sk: sv for sk, sv in v.items() if sk != "per_case"} for k, v in smoke_res["prompt_runs"].items()}, indent=2))
         return 0
 
     if args.run_all:

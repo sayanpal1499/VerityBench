@@ -53,6 +53,8 @@ class QATrace(BaseModel):
     quote_checks: list[QuoteCheckResult] = Field(default_factory=list)
     fuzzy_candidate_count: int = 0
     error: Optional[str] = None
+    error_category: Optional[str] = None
+    is_infrastructure_error: bool = False
     llm_metadata: dict[str, Any] = Field(default_factory=dict)
 
 

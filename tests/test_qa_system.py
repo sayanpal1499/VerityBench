@@ -200,3 +200,52 @@ def test_api_failure_returns_safe_fallback(tmp_path: Path) -> None:
         assert out._trace is not None
         assert out._trace.error is not None
         assert "API failure" in out._trace.error
+        assert out._trace.is_infrastructure_error is True
+
+
+def test_circuit_breaker_halts_on_consecutive_infrastructure_errors() -> None:
+    """Evaluation runner circuit breaker halts when consecutive infrastructure errors occur."""
+    from evaluation.runner import CircuitBreakerError, run_qa_suite_for_prompt
+    from src.schemas import BaseCaseRecord
+
+    cases = [
+        BaseCaseRecord(
+            id=f"BASE-00{i}",
+            document_id="DOC-001",
+            question=f"Question {i}?",
+            expected_answer="answer",
+            answer_type="named_entity",
+            should_abstain=False,
+            expected_evidence=["evidence"],
+            status="verified",
+            verified_by="reviewer",
+            verified_on="2026-10-13",
+        )
+        for i in range(1, 5)
+    ]
+    docs = {"DOC-001": "Some document text here for testing."}
+
+    # Runner fn that simulates consecutive infrastructure failures
+    call_counter = 0
+
+    def mock_failing_runner(*args, **kwargs):
+        nonlocal call_counter
+        call_counter += 1
+        return answer_question(
+            document=SAMPLE_DOCUMENT,
+            question="What is the voltage?",
+            prompt_version="grounded_v1",
+        )
+
+    with patch("src.qa_system.call_llm", side_effect=LLMClientError("429 rate limit exceeded")):
+        with pytest.raises(CircuitBreakerError, match="Circuit breaker tripped"):
+            run_qa_suite_for_prompt(
+                base_cases=cases,
+                variants=[],
+                documents=docs,
+                prompt_version="grounded_v1",
+                qa_runner_fn=mock_failing_runner,
+                max_consecutive_errors=2,
+            )
+    # Tripped after exactly 2 consecutive errors, halting case 3 and 4
+    assert call_counter == 2
