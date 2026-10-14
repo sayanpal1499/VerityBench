@@ -190,10 +190,12 @@ CLUSTER_ENGINEERING_REMEDIATIONS: dict[str, dict[str, str]] = {
     },
     "FABRICATED_CONTENT": {
         "model_behavior_hypothesis": (
-            "Completed model answers flagged by hallucination verification. Investigation reveals these 5 cases "
-            "are evaluation detector alignment artifacts: Layer-2 deterministic sentence matching aligned against "
-            "single or wrong bullet points in multi-tier documents (e.g. Standard Merchant vs Enterprise Clearing Tier "
-            "in BASE-021/VAR-033), triggering false-positive numeric conflict flags."
+            "Completed model answers flagged by hallucination verification. Qualitative inspection indicates these "
+            "flags appear consistent with detector segmentation (e.g., regex period-splitting on honorifics like 'Dr.' "
+            "in BASE-002), formatting, or single-sentence context-retrieval limitations (e.g., matching Standard Merchant "
+            "vs Enterprise Clearing Tier in BASE-021/VAR-033, or single-sentence windowing in BASE-030/BASE-035). However, "
+            "as recorded in results/failure_review.csv, these cases remain pending formal human review, so this interpretation "
+            "has not been independently validated."
         ),
         "concrete_improvement": (
             "Enhance Layer-2 deterministic matcher with multi-sentence context windowing and entity-scoped "

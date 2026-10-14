@@ -3428,7 +3428,7 @@
           "actual_answer": "Dr. Maren Lindqvist",
           "scoring_reason": "Exact normalized expected_answer found in output without negation."
         },
-        "model_behavior_hypothesis": "Completed model answers flagged by hallucination verification. Investigation reveals these 5 cases are evaluation detector alignment artifacts: Layer-2 deterministic sentence matching aligned against single or wrong bullet points in multi-tier documents (e.g. Standard Merchant vs Enterprise Clearing Tier in BASE-021/VAR-033), triggering false-positive numeric conflict flags.",
+        "model_behavior_hypothesis": "Completed model answers flagged by hallucination verification. Qualitative inspection indicates these flags appear consistent with detector segmentation (e.g., regex period-splitting on honorifics like 'Dr.' in BASE-002), formatting, or single-sentence context-retrieval limitations (e.g., matching Standard Merchant vs Enterprise Clearing Tier in BASE-021/VAR-033, or single-sentence windowing in BASE-030/BASE-035). However, as recorded in results/failure_review.csv, these cases remain pending formal human review, so this interpretation has not been independently validated.",
         "concrete_improvement": "Enhance Layer-2 deterministic matcher with multi-sentence context windowing and entity-scoped bullet point parsing before computing numeric overlap.",
         "verification_method": "Re-run Layer-2 detector with multi-sentence bullet-aware alignment and verify 0 false-positive conflict flags on verified correct answers."
       }

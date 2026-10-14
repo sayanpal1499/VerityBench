@@ -1035,7 +1035,7 @@ Every confidence value across the suite originates from one of four verified sou
 > [!IMPORTANT]
 > **Infrastructure vs. Model-Reasoning Limitation Disclosure:**
 > Exactly 32 of the 37 failures (86.5%) are System / Infrastructure Failures (`OUTPUT_SCHEMA_TRUNCATION` under 512 token limits, and `API_RATE_LIMIT_EXHAUSTION` under daily token quotas).
-> Only 5 of the 37 failures (13.5%) occurred on completed model responses (`FABRICATED_CONTENT`), and detailed inspection confirms all 5 are evaluation detector alignment artifacts (Layer-2 deterministic sentence matching false positives on multi-tier bullet points).
+> Only 5 of the 37 failures (13.5%) occurred on completed model responses (`FABRICATED_CONTENT`). While qualitative examination suggests these flags appear consistent with detector segmentation, formatting, or context-retrieval limitations (such as single-sentence alignment on multi-tier bullet points or abbreviation splitting), this interpretation has not been independently validated through formal human adjudication.
 > **Critical Finding:** The saved benchmark run does NOT provide evidence of substantive model reasoning failures on `source_conflict`, `prompt_injection`, or `long_context`, because those test cases never returned valid completed responses from the API. Claiming that the model has behavioral vulnerabilities on those categories would be scientifically unsupported. To evaluate true model-internal robustness on those perturbations, a live benchmark run with `max_output_tokens=1024` and sufficient token quota is required.
 
 ![Observed Failure Mode Distribution](figures/failure_distribution.png)
@@ -1080,14 +1080,14 @@ Every confidence value across the suite originates from one of four verified sou
         regression_section = """
 ---
 
-## 8. Prompt Regression & 3-Run Noise-Floor Status (`results/regression_report.json`)
+## 8. Prompt Regression & 3-Run Noise-Floor Status (Target Artifact: `results/regression_report.json`)
 
 > [!NOTE]
 > **Live Experiment Status: INCOMPLETE / PENDING RESUME**
 >
 > The 3-run uncached noise-floor procedure (`bypass_cache=True, temperature=0.0, seed=42`) and candidate prompt regression comparison (`grounded_v2` and planted negative-control `grounded_v2_bad` vs. `grounded_v1`) were safely paused during execution to preserve API rate-limit quota and avoid duplicate executions. Live measurements are strictly **not fabricated or assumed**.
 >
-> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized, resume execution via:
+> **Artifact Status:** Because this live experiment has not completed, `results/regression_report.json` is intentionally absent from the repository. The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized with live API quota, resume execution via:
 > `python -m evaluation.runner --run-noise-floor --run-regression`
 
 - **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).
@@ -1105,7 +1105,7 @@ Every confidence value across the suite originates from one of four verified sou
 > **PROVENANCE DISCLOSURE: HISTORICAL BENCHMARK RUN VS. CURRENT DATASET GOVERNANCE**
 >
 > 1. **Historical Benchmark Provenance:**
->    The performance metrics, accuracy tables, hallucination rates, calibration curves, and failure clusters reported below are **empirical historical measurements** from a live benchmark run executed on **{metrics.get('generated_at_utc', '')}** against historical dataset snapshot hash **`{metrics.get('dataset_hash', '')}`** using `groq/openai/gpt-oss-20b` (System Under Test) and `gemini/gemini-3.5-flash-lite` (independent judge). All 218 raw provider responses are persisted in `.cache/llm_responses/`.
+>    The performance metrics, accuracy tables, hallucination rates, calibration curves, and failure clusters reported below are **empirical historical measurements** from a live benchmark run executed on **{metrics.get('generated_at_utc', '')}** against historical dataset snapshot hash **`{metrics.get('dataset_hash', '')}`** using `groq/openai/gpt-oss-20b` (System Under Test) and `gemini/gemini-3.5-flash-lite` (independent judge). All 218 raw provider responses were captured in `.cache/llm_responses/` (excluded from Git to prevent repository bloat), while full model outputs, scored predictions, claim audits, and aggregate metrics are committed under `results/`.
 >
 > 2. **Current Repository Dataset Status & Governance Refusal:**
 >    In the current canonical dataset (`data/variants.jsonl`, current dataset hash `211ca23296bb1612`), exactly **20 variants (`VAR-001`–`VAR-020`)** are human-verified, while **80 variants (`VAR-021`–`VAR-100`)** remain in **`status: "draft"`** (`verified_by: null`, `verified_on: null`) pending final human sign-off.
