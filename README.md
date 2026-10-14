@@ -24,9 +24,9 @@ VerityBench evaluates the factual reliability, selective abstention, and robustn
 ### High-Level Summary
 
 - **Offline Verifiability:** 69 of 69 unit and integration tests pass offline in ~4 seconds with zero API calls.
-- **Evidence-Grounded Accuracy:** Under `grounded_v1`, the system achieved **77.8% accuracy (112/144)** across LLM-evaluated cases (95% bootstrap CI: `[71.1%, 84.7%]`) and **100.0% accuracy (89/89)** on substantive completed answers.
-- **Hallucination Control:** Output-level hallucination was held to **3.5% (5/144)** overall and **5.6% (5/89)** on answered queries, with claim-level bad claims at **5.1% (5/98)**.
-- **Root-Cause Failure Isolation:** 32 of 37 observed failures (**86.5%**) were infrastructure cutoffs (token length truncation or API rate limits), not model reasoning errors.
+- **System vs. Completed-Output Accuracy:** Under `grounded_v1`, full-suite accuracy is **77.8% (112/144)** (95% bootstrap CI: `[71.1%, 84.7%]`), which includes 32 defensive error fallbacks caused by infrastructure limits (token length cutoff and API rate limits). Under the saved scoring rules and this historical dataset, completed model responses achieved **100.0% accuracy (89/89 substantive answers correct + 23/23 valid abstentions)**; this does not establish that the model will achieve 100% accuracy on new data.
+- **Detector Flags vs. Model Hallucinations:** The automated detector flagged five completed answers (`BASE-002`, `BASE-021`, `BASE-030`, `BASE-035`, and `VAR-033`), representing an observed detector-flag rate of **3.5% (5/144)** overall and **5.6% (5/89)** on substantive answers. Inspection of the saved predictions and source documents suggests that these flags are likely associated with detector limitations (abbreviation splitting on `"Dr."`, single-sentence windowing, and table-row alignment). However, all five cases remain marked `pending_human_review` in [`results/failure_review.csv`](results/failure_review.csv), so these explanations and the true model hallucination rate have not been formally adjudicated. Accordingly, the reported 3.5% figure represents the observed detector-flag rate, not a verified model hallucination rate.
+- **Failure Mode Accounting:** The 37 observed failures break down into 32 infrastructure limits (17 `max_output_tokens=512` JSON truncations, 15 HTTP 429 quota exhaustion) and 5 detector hallucination flags. The 32 API limits prevented model generation from completing; for the 5 detector-flagged cases, qualitative inspection indicates likely detector artifacts, but formal adjudication remains incomplete. No substantive model-reasoning failure clusters were isolated in completed outputs; the five detector flags remain unadjudicated.
 - **Strict Governance:** An unbypassable verification gate halts benchmark execution whenever draft test cases lack recorded human sign-off.
 
 > [!IMPORTANT]
@@ -57,17 +57,21 @@ VerityBench reports evaluation metrics across explicitly disaggregated denominat
 | **Suite Accuracy ($N=150$)** | Correct / Total 150 | **118/150 (78.7%)** | **43/150 (28.7%)** | 95% Bootstrap CI: `[72.7%, 85.0%]` (v1) |
 | **LLM-Evaluated Accuracy ($N=144$)** | Correct / LLM-Evaluated 144 | **112/144 (77.8%)** | **37/144 (25.7%)** | 95% Bootstrap CI: `[71.1%, 84.7%]` (v1) |
 | **Answered-Only Accuracy** | Correct Answers / Substantive Answers | **89/89 (100.0%)** | **14/15 (93.3%)** | Task-rubric correctness on substantive answers (see metric note below) |
-| **Overall Hallucination ($N=144$)** | Hallucinated Outputs / LLM Cases | **5/144 (3.5%)** | **1/144 (0.7%)** | Strongly deflated in `naive_v0` due to 129 API error fallbacks |
-| **Answered-Only Hallucination** | Hallucinated / Substantive Answers | **5/89 (5.6%)** | **1/15 (6.7%)** | Outputs with $\ge 1$ claim flagged by claim verifier (see metric note below) |
+| **Overall Detector-Flag Rate ($N=144$)** | Outputs Flagged by Detector / LLM Cases | **5/144 (3.5%)** | **1/144 (0.7%)** | Strongly deflated in `naive_v0` due to 129 API error fallbacks |
+| **Answered-Only Detector-Flag Rate** | Flagged Outputs / Substantive Answers | **5/89 (5.6%)** | **1/15 (6.7%)** | Outputs with $\ge 1$ claim flagged by claim verifier (see metric note below) |
 | **Post-Gate System ECE** | Expected Calibration Error ($N=144$) | **0.0064** | N/A | Brier score: `0.0001` (includes 32 error fallbacks at conf=0.0) |
 | **Intrinsic Raw-Model ECE** | Pre-Gate Model Calibration ($N=112$) | **0.0082** | N/A | Brier score: `0.0001` (all completed outputs in single `[0.99, 1.0]` bin) |
 
 > [!NOTE]
-> **Metric Clarification: Task-Rubric Accuracy (89/89, 100.0%) vs. Hallucinated Outputs (5/89, 5.6%):**
-> These two metrics evaluate different levels of the system and are not contradictory:
-> 1. **Answered-Only Accuracy (`89/89, 100.0%`)** is evaluated by [`evaluation/scoring.py`](evaluation/scoring.py) at the task level against human-verified ground-truth answers. Every one of the 89 substantive answers generated by `grounded_v1` provided the correct entity, metric, date, or fact required by the question rubric.
-> 2. **Answered-Only Hallucination Rate (`5/89, 5.6%`)** is evaluated by [`evaluation/hallucination.py`](evaluation/hallucination.py) at the atomic claim level, checking whether each individual proposition is strictly entailed by source text.
-> 3. **Apparent Detector Alignment Limitations in the 5 Flagged Cases:** Inspection of the saved claim-level records across the 5 flagged cases ([`BASE-002, BASE-021, BASE-030, BASE-035, VAR-033`](#4-failure-mode-clustering--root-causes)) indicates that the hallucination flags appear consistent with detector segmentation, formatting, or single-sentence context-retrieval limitations (such as regex period splitting on honorifics like `"Dr."` in `BASE-002`, or Layer-2 matching claims against single or preceding bullet points in multi-tier specifications like `BASE-021`, `BASE-030`, `BASE-035`, and `VAR-033`), rather than verified factual fabrications. However, because formal human adjudication was not independently recorded for these specific flags in [`results/failure_review.csv`](results/failure_review.csv), this interpretation has not been independently validated.
+> **Metric Clarification: Task-Rubric Accuracy (89/89, 100.0%) vs. Detector-Flagged Hallucinations (5/89, 5.6%):**
+> These two metrics evaluate different levels of the system and explain the relationship between the results:
+> 1. **Answered-Only Accuracy (`89/89, 100.0%`):** Evaluated by [`evaluation/scoring.py`](evaluation/scoring.py) at the task level against human-verified ground-truth answers. Under the saved scoring rules and historical run data, each of the 89 substantive answers generated by `grounded_v1` matched the required entity, metric, date, or fact in the ground-truth rubric. This historical result does not establish that the model will achieve 100% accuracy on new data.
+> 2. **Detector-Flagged Hallucinations (`5/89, 5.6%`):** Evaluated by [`evaluation/hallucination.py`](evaluation/hallucination.py) at the atomic claim level. The detector flagged five completed answers ([`BASE-002, BASE-021, BASE-030, BASE-035, VAR-033`](#4-failure-mode-clustering--root-causes)). Inspection of the saved predictions and source documents suggests that these flags are likely associated with detector limitations, including:
+>    - `BASE-002`: Regex period splitting on `"Dr."` fragmented the name `"Dr. Maren Lindqvist"`.
+>    - `BASE-021` & `VAR-033`: Deterministic Layer 2 aligned Enterprise Clearing Tier claims against the preceding Standard Merchant Tier row.
+>    - `BASE-030`: Single-sentence retrieval windowing captured only the first sentence of a multi-clause contract condition, flagging `['45', '60']` against `['45']`.
+>    - `BASE-035`: Negative temperature restriction (`"below 8 °C"`) was aligned against the room-temperature sentence (`15 °C–25 °C`).
+>    However, in [`results/failure_review.csv`](results/failure_review.csv), all five cases remain marked `pending_human_review`, so these explanations and the true model hallucination rate have not been formally adjudicated. Accordingly, the reported 3.5% (5/144) and 5.6% (5/89) figures represent observed detector-flag rates, not verified model hallucination rates.
 
 > [!WARNING]
 > **Ablation Confounding Note:**
@@ -384,7 +388,7 @@ Once draft variants are human-reviewed and authorized:
 
 - **Abstention Recall:** **100.0% (23/23)** on unanswerable test cases.
 - **Abstention Precision:** **41.8% (23/55)**, reflecting 32 defensive abstentions caused by API truncation and rate limits.
-- **Answered-Only Hallucination Rate:** **5.6% (5/89)** under `grounded_v1` vs. **6.7% (1/15)** under `naive_v0`.
+- **Answered-Only Detector-Flag Rate:** **5.6% (5/89)** under `grounded_v1` vs. **6.7% (1/15)** under `naive_v0`.
 - **Relationship to 100% Answer Accuracy:** All 89 substantive answers satisfied the ground-truth question rubric. The 5 flagged cases appear consistent with detector segmentation, formatting, or context-retrieval limitations (see [Failure Clustering](#4-failure-mode-clustering--root-causes)), though this interpretation has not been independently validated through formal human adjudication.
 
 ![Hallucination Rate by Category](reports/figures/hallucination_rate_by_category.png)
