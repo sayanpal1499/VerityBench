@@ -51,8 +51,8 @@ During live preflight API verification (`RUN-00-PREFLIGHT`, `results/preflight_c
 | **Overall Accuracy (All 150)** | $\frac{\text{Correct}}{\text{Total 150}}$ | **118/150 (78.7%)** | **43/150 (28.7%)** | Includes 6 correctly rejected pre-API malformed questions + 29 correct abstentions (23 unanswerable) + correct substantive answers. |
 | **LLM-Evaluated Accuracy (144)** | $\frac{\text{Correct}}{\text{LLM-Evaluated 144}}$ | **112/144 (77.8%)** | **37/144 (25.7%)** | Excludes pre-API rejections. For v1: 89 answered + 23 abstained = 112. For v0: 14 answered + 23 unanswerable API fallbacks = 37. |
 | **Answered-Only Accuracy** | $\frac{\text{Correct Substantive Answers}}{\text{Substantive Answers}}$ | **89/89 (100.0%)** | **14/15 (93.3%)** | Accuracy measured strictly on questions where the system produced a substantive answer. |
-| **Overall Hallucination Rate (144)** | $\frac{\text{Outputs with Hallucination}}{\text{LLM-Evaluated 144}}$ | **5/144 (3.5%)** | **1/144 (0.7%)** | Evaluated over all 144 LLM cases. Strongly deflated for `naive_v0` because it failed on 129 cases. |
-| **Answered-Only Hallucination Rate** | $\frac{\text{Outputs with Hallucination}}{\text{Substantive Answers}}$ | **5/89 (5.6%)** | **1/15 (6.7%)** | True comparison of generation reliability on substantive answers: `grounded_v1` hallucinates less (5.6% vs 6.7%). |
+| **Overall Detector-Flag Rate (144)** | $\frac{\text{Outputs Flagged by Detector}}{\text{LLM-Evaluated 144}}$ | **5/144 (3.5%)** | **1/144 (0.7%)** | Evaluated over all 144 LLM cases. Strongly deflated for `naive_v0` because it failed on 129 cases. |
+| **Answered-Only Detector-Flag Rate** | $\frac{\text{Outputs Flagged by Detector}}{\text{Substantive Answers}}$ | **5/89 (5.6%)** | **1/15 (6.7%)** | Observed detector-flag rate on substantive answers; flags remain unadjudicated and do not establish verified hallucination differences. |
 
 ---
 
@@ -71,6 +71,10 @@ During live preflight API verification (`RUN-00-PREFLIGHT`, `results/preflight_c
 | `format_edge` | `3/10 (30.0%)` | `[10.8%, 60.3%]` | `3/10 (30.0%)` | `+0.0 pp` |
 | `prompt_injection` | `1/6 (16.7%)` | `[3.0%, 56.4%]` | `0/6 (0.0%)` | `+16.7 pp` |
 | `empty_malformed` | `6/6 (100.0%)` | `[61.0%, 100.0%]` | `6/6 (100.0%)` | `+0.0 pp` |
+
+> [!NOTE]
+> **Infrastructure Caveat on Low-Scoring Categories:**
+> The `0/10 (0.0%)` score on `source_conflict` and low scores on `format_edge` (`3/10`) and `prompt_injection` (`1/6`) do **not** reflect model reasoning failures. Rather, requests in these categories were aborted by API rate-limit exhaustion (`HTTP 429`) or output token cutoffs (`HTTP 400`) before generation could complete. See [Section 6](#6-failure-mode-distribution--root-cause-clusters-grounded_v1) for the full failure mode distribution.
 
 ![Accuracy by Category](figures/accuracy_by_category.png)
 
@@ -101,15 +105,15 @@ During live preflight API verification (`RUN-00-PREFLIGHT`, `results/preflight_c
 
 ![Output Hallucination Rate by Category](figures/hallucination_rate_by_category.png)
 
-### 3.3 Overall vs. Answered-Only Hallucination Rate & Abstention Trade-Off
-| Configuration | Overall Hallucination Rate (`N=144`) | Answered-Only Hallucination Rate | Substantive Answers Generated | Evaluated Accuracy (`N=144`) | Answered-Only Accuracy |
+### 3.3 Overall vs. Answered-Only Detector-Flag Rate & Abstention Trade-Off
+| Configuration | Overall Detector-Flag Rate (`N=144`) | Answered-Only Detector-Flag Rate | Substantive Answers Generated | Evaluated Accuracy (`N=144`) | Answered-Only Accuracy |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | `grounded_v1` (Gate ON) | `5/144 (3.5%)` | `5/89 (5.6%)` | `89/144 (61.8%)` | `112/144 (77.8%)` | `89/89 (100.0%)` |
 | `naive_v0` (Ablation) | `1/144 (0.7%)` | `1/15 (6.7%)` | `15/144 (10.4%)` | `37/144 (25.7%)` | `14/15 (93.3%)` |
 
 > [!NOTE]
 > **Abstention / Under-Answering Trade-Off Disclosure:**
-> While `naive_v0` nominally records an overall hallucination rate of only `0.7%` (`1/144`), this metric is strongly deflated because `naive_v0` failed or abstained on `129` out of `144` cases (due to API token exhaustion and missing grounding). On questions where it produced a substantive answer (`N=15`), its hallucination rate is `6.7%` (`1/15`), which is higher than `grounded_v1`'s answered-only rate of `5.6%` (`5/89`). Furthermore, `grounded_v1` successfully answered `89/144` (`61.8%`) of questions with `100.0%` answered accuracy, compared to `naive_v0`'s `15/144` (`10.4%`).
+> While `naive_v0` nominally records an overall detector-flag rate of only `0.7%` (`1/144`), this metric is strongly deflated because `naive_v0` failed or abstained on `129` out of `144` cases (due to API token exhaustion and missing grounding). On questions where it produced a substantive answer (`N=15`), its detector-flag rate is `6.7%` (`1/15`) vs. `5.6%` (`5/89`) for `grounded_v1`. However, because flags remain unadjudicated and appear consistent with detector artifacts on `grounded_v1`, this comparison reflects detector behavior rather than verified model hallucination rates. Furthermore, `grounded_v1` successfully answered `89/144` (`61.8%`) of questions with `100.0%` answered accuracy under the saved scoring rubric, compared to `naive_v0`'s `15/144` (`10.4%`).
 
 
 ---

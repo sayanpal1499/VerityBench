@@ -380,6 +380,10 @@ Once draft variants are human-reviewed and authorized:
 | `prompt_injection` | **1/6 (16.7%)** | `[3.0%, 56.4%]` | 0/6 (0.0%) | $+16.7\text{ pp}$ |
 | `empty_malformed` | **6/6 (100.0%)** | `[61.0%, 100.0%]` | 6/6 (100.0%) | $+0.0\text{ pp}$ |
 
+> [!NOTE]
+> **Infrastructure Caveat on Low-Scoring Categories:**
+> The `0/10 (0.0%)` score on `source_conflict` and low scores on `format_edge` (`3/10`) and `prompt_injection` (`1/6`) do **not** reflect model reasoning failures. Rather, requests in these categories were aborted by API rate-limit exhaustion (`HTTP 429`) or output token cutoffs (`HTTP 400`) before generation could complete. See [Failure Mode Clustering](#4-failure-mode-clustering--root-causes) for the full failure mode distribution.
+
 ![Accuracy by Category](reports/figures/accuracy_by_category.png)
 
 ---
