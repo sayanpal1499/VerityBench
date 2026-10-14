@@ -2,8 +2,8 @@
 
 Implements 10 adversarial categories (100 variants: VAR-001 through VAR-100) linked to
 verified base cases in data/base_cases.jsonl.
-Note: Category 11 ('multi_hop_conditional') is intentionally held back on paper in PLAN.md
-Section 9 and reports/evaluation_report.md Section 10 for the technical interview.
+Note: Category 11 ('multi_hop_conditional') is intentionally held back on paper in
+reports/evaluation_report.md Section 10 for the technical interview.
 
 Every generated variant starts with status='draft', verified_by=None, verified_on=None.
 Only the human may change status to 'verified' after reviewing data/variants.jsonl.

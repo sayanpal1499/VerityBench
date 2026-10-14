@@ -26,7 +26,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 DEFAULT_CACHE_DIR = PROJECT_ROOT / ".cache" / "llm_responses"
 
-# Default fixed models approved after RUN-00-PREFLIGHT (PLAN.md §3.1)
+# Default fixed models approved after RUN-00-PREFLIGHT preflight verification
 DEFAULT_SUT_MODEL = "groq/openai/gpt-oss-20b"
 DEFAULT_JUDGE_MODEL = "gemini/gemini-3.5-flash-lite"
 

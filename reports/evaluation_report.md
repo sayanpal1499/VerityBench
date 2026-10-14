@@ -210,7 +210,7 @@ Every confidence value across the suite originates from one of four verified sou
 
 ## Reserved 11th Adversarial Category (`multi_hop_conditional` — Held Back on Paper for Interview)
 
-Per `PLAN.md` §9, VerityBench implements 10 adversarial categories in [`evaluation/adversarial.py`](../evaluation/adversarial.py) (`VAR-001`–`VAR-100`) and holds back **Category 11: `multi_hop_conditional` (Cross-Clause Conditional & Electric Current Override)** on paper for live interview extension:
+By design, VerityBench implements 10 adversarial categories in [`evaluation/adversarial.py`](../evaluation/adversarial.py) (`VAR-001`–`VAR-100`) and holds back **Category 11: `multi_hop_conditional` (Cross-Clause Conditional & Electric Current Override)** on paper for live interview extension:
 
 - **Target Failure Mode Tested:** Single-paragraph retrieval shortcutting where the model stops at a baseline numerical specification in Paragraph 1 and fails to apply a conditional override in Paragraph 4 that modifies the same physical quantity.
 - **Dimensionally Consistent Specification (Electric Current in Milliamperes, $\text{mA}$):**

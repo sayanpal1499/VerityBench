@@ -434,7 +434,7 @@ def summarize_failure_clusters(
             if not unmet_req
             else (
                 f"WARNING: Only {observed_count} distinct failure cluster(s) observed (< {MIN_REQUIRED_CLUSTERS} required). "
-                f"Per PLAN.md Section 8.2, never invent or split clusters artificially; run targeted human-verified "
+                f"Never invent or split clusters artificially; run targeted human-verified "
                 f"adversarial probes or prominently flag this unmet requirement in the report."
             )
         ),
