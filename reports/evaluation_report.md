@@ -192,14 +192,14 @@ Every confidence value across the suite originates from one of four verified sou
 
 ---
 
-## 8. Prompt Regression & 3-Run Noise-Floor Status (`results/regression_report.json`)
+## 8. Prompt Regression & 3-Run Noise-Floor Status (Target Artifact: `results/regression_report.json`)
 
 > [!NOTE]
 > **Live Experiment Status: INCOMPLETE / PENDING RESUME**
 >
 > The 3-run uncached noise-floor procedure (`bypass_cache=True, temperature=0.0, seed=42`) and candidate prompt regression comparison (`grounded_v2` and planted negative-control `grounded_v2_bad` vs. `grounded_v1`) were safely paused during execution to preserve API rate-limit quota and avoid duplicate executions. Live measurements are strictly **not fabricated or assumed**.
 >
-> The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized, resume execution via:
+> **Artifact Status:** Because this live experiment has not completed, `results/regression_report.json` is intentionally absent from the repository. The regression dataset (`data/regression_cases.jsonl`), atomic per-repetition checkpointing (`results/regression_noise_floor_checkpoint.json`), negative control harness, and provider reset header pacing are verified offline with 69 passing tests. When authorized with live API quota, resume execution via:
 > `python -m evaluation.runner --run-noise-floor --run-regression`
 
 - **Regression Baseline Provenance:** 40 canonical regression cases in `data/regression_cases.jsonl` with ground truth inherited from base cases (`status: "inherited_from_base_case"`).
