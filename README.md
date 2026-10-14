@@ -10,6 +10,29 @@ A zero-framework adversarial evaluation harness and audit pipeline for grounded 
 
 ---
 
+## Table of Contents
+
+- [Key Results & Current Status](#key-results--current-status)
+  - [High-Level Summary](#high-level-summary)
+  - [Authoritative Per-Configuration Accounting](#authoritative-per-configuration-accounting)
+- [Repository Structure](#repository-structure)
+- [System Architecture](#system-architecture)
+- [Key Engineering Features](#key-engineering-features)
+- [Quick Start & Reproducibility Guide](#quick-start--reproducibility-guide)
+  - [Offline Test & Validation Commands](#offline-test--validation-commands-zero-api-calls-zero-cost)
+  - [Verification Gate & Live Benchmark Commands](#verification-gate--live-benchmark-commands)
+- [Evaluation Results & Reports](#evaluation-results--reports)
+  - [1. Accuracy Across Adversarial Categories](#1-accuracy-across-adversarial-categories)
+  - [2. Hallucination Rates & Selective Abstention](#2-hallucination-rates--selective-abstention)
+  - [3. Confidence Calibration & Reliability Diagram](#3-confidence-calibration--reliability-diagram)
+  - [4. Failure Mode Clustering & Root Causes](#4-failure-mode-clustering--root-causes)
+- [Dataset Governance & Limitations](#dataset-governance--limitations)
+  - [Current Dataset Status](#current-dataset-status)
+  - [Technical Limitations & Methodological Disclosures](#technical-limitations--methodological-disclosures)
+- [Proposed Future Work: Multi-Hop Conditional Reasoning](#proposed-future-work-multi-hop-conditional-reasoning)
+
+---
+
 ## Key Results & Current Status
 
 VerityBench evaluates the factual reliability, selective abstention, and robustness of Large Language Models performing document-grounded question answering under adversarial stress. Built from scratch without third-party evaluation wrappers (`RAGAS`, `TruLens`, `DeepEval`, or `LangChain`), it provides complete transparency into prompt contracts, token accounting, quote verification, and scoring mechanics.
@@ -122,19 +145,6 @@ VerityBench/
 ├── requirements.txt                       # Pinned project dependencies
 └── README.md                              # Project evaluation documentation and benchmarks
 ```
-
----
-
-## Table of Contents
-
-- [Key Results & Current Status](#key-results--current-status)
-- [Repository Structure](#repository-structure)
-- [System Architecture](#system-architecture)
-- [Key Engineering Features](#key-engineering-features)
-- [Quick Start & Reproducibility Guide](#quick-start--reproducibility-guide)
-- [Evaluation Results & Reports](#evaluation-results--reports)
-- [Dataset Governance & Limitations](#dataset-governance--limitations)
-- [Proposed Future Work: Multi-Hop Conditional Reasoning](#proposed-future-work-multi-hop-conditional-reasoning)
 
 ---
 
